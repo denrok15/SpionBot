@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Optional
 from collections import defaultdict, deque
 from functools import wraps
-
+from subscription import is_subscribed, subscribe_keyboard
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -308,3 +308,20 @@ rate_limiter = RateLimiter()
 def create_decorators(db_instance):
     """Создает экземпляр BotDecorators с переданной БД"""
     return BotDecorators(db_instance, room_locks)
+
+def subscription_required(func):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+        try:
+            if await is_subscribed(context.bot, user_id):
+                return await func(update, context, *args, **kwargs)
+            else:
+                keyboard = subscribe_keyboard()
+                await update.message.reply_text(
+                    "❌ Ты ещё не подписался на канал. Подпишись, чтобы продолжить:", 
+                    reply_markup=keyboard
+                )
+        except Exception as e:
+            logger.error(f"Ошибка в subscription_required: {e}")
+            await update.message.reply_text("❌ Произошла ошибка проверки подписки.")
+    return wrapper

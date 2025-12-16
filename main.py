@@ -18,8 +18,11 @@ from dotenv import load_dotenv
 import asyncpg
 from datetime import datetime
 import aiohttp
-from decorators import create_decorators, room_locks
+from decorators import create_decorators, room_locks,subscription_required
 import nest_asyncio
+from telegram.ext import CallbackQueryHandler
+from subscription import is_subscribed, subscribe_keyboard
+from telegram.error import BadRequest
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -232,6 +235,58 @@ decorators = create_decorators(db)
 
 DEFAULT_MODE = MODE_CLASH
 
+async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = get_main_keyboard()
+
+    room_id = await db.get_user_room(user_id)
+    if room_id:
+        room = await db.get_room(room_id)
+        mode = room.get("mode", DEFAULT_MODE) if room else DEFAULT_MODE
+    else:
+        mode = DEFAULT_MODE
+
+    theme_name = get_theme_name(mode)
+
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=(
+            "🎮 Добро пожаловать в игру 'Шпион'!\n\n"
+            "📌 Используйте кнопки ниже или команды:\n"
+            "/create - создать комнату\n"
+            "/join <ID комнаты> - присоединиться к комнате\n"
+            "/startgame - начать игру\n"
+            "/restart - перезапустить игру\n"
+            "/word - узнать своё слово (в личке с ботом)\n"
+            "/cards - посмотреть все карты\n"
+            "/rules - правила игры\n\n"
+            f"🎴 Текущая тематика: {theme_name}\n"
+            "Доступные режимы: ClashRoyale и Dota2\n"
+            "Создатель комнаты может сменить режим командами /mode_clash и /mode_dota\n\n"
+            "👥 Игру создали It tut Денис и Артур!"
+        ),
+        reply_markup=keyboard
+    )
+
+
+async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    await query.answer()
+
+    if await is_subscribed(context.bot, user_id):
+        await query.message.delete()
+        await show_main_menu(user_id, context)
+    else:
+        new_text = "❌ Ты ещё не подписался на канал. Подпишись, чтобы продолжить:"
+        new_markup = subscribe_keyboard()
+
+        if query.message.text != new_text or query.message.reply_markup != new_markup:
+            try:
+                await query.message.edit_text(new_text, reply_markup=new_markup)
+            except BadRequest:
+                pass 
+
 
 def get_words_and_cards_by_mode(mode: str):
     if mode == MODE_DOTA:
@@ -247,8 +302,7 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(
         [
             ["🎮 Создать комнату", "🔗 Присоединиться"],
-            ["▶️ Начать игру", "🔄 Перезапустить"],
-            ["📖 Правила","🚪 Выйти из комнаты"],
+            ["📖 Правила"],
         ],
         resize_keyboard=True,
         one_time_keyboard=False
@@ -267,33 +321,18 @@ def get_room_keyboard():
 
 @decorators.rate_limit()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = get_main_keyboard()
-    room_id = await db.get_user_room(update.effective_user.id)
-    
-    if room_id:
-        room = await db.get_room(room_id)
-        mode = room.get("mode", DEFAULT_MODE) if room else DEFAULT_MODE
-    else:
-        mode = DEFAULT_MODE
-    
-    theme_name = get_theme_name(mode)
-    await update.message.reply_text(
-        "🎮 Добро пожаловать в игру 'Шпион'!\n\n"
-        "📌 Используйте кнопки ниже или команды:\n"
-        "/create - создать комнату\n"
-        "/join <ID комнаты> - присоединиться к комнате\n"
-        "/startgame - начать игру\n"
-        "/restart - перезапустить игру\n"
-        "/word - узнать своё слово (в личке с ботом)\n"
-        "/cards - посмотреть все карты\n"
-        "/rules - правила игры\n\n"
-        f"🎴 Текущая тематика: {theme_name}\n"
-        "Доступные режимы: ClashRoyale и Dota2\n"
-        "Создатель комнаты может сменить режим командами /mode_clash и /mode_dota\n\n"
-        "👥 Игру создали It tut Денис и Артур!",
-        reply_markup=keyboard
-    )
+    user_id = update.effective_user.id
 
+    if not await is_subscribed(context.bot, user_id):
+        await update.message.reply_text(
+            "❗ Чтобы играть, подпишись на канал:",
+            reply_markup=subscribe_keyboard()
+        )
+        return
+
+    await show_main_menu(user_id, context)
+
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -327,7 +366,7 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard
     )
-
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -385,6 +424,7 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
@@ -501,6 +541,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
@@ -543,6 +584,7 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.rate_limit()
@@ -617,7 +659,7 @@ async def get_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ Вы - мирный игрок!\n\n🎴 Загаданная карта: <b>{player_data['word']}</b>\n👥 Игроков: {len(await db.get_room_players(room_id))}",
                 parse_mode=ParseMode.HTML
             )
-
+@subscription_required
 @decorators.rate_limit()
 async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -646,7 +688,7 @@ async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Статус: {status}{current_word}\n\n"
         f"{players_list}"
     )
-
+@subscription_required
 @decorators.rate_limit()
 @decorators.room_lock()
 async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -678,6 +720,7 @@ async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
     await update.message.reply_text("✅ Вы вышли из комнаты!", reply_markup=keyboard)
 
+@subscription_required
 @decorators.rate_limit()
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
@@ -702,7 +745,7 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Игра проходит устно, бот только раздаёт роли!",
         reply_markup=keyboard
     )
-
+@subscription_required
 @decorators.rate_limit()
 async def show_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -745,6 +788,7 @@ async def show_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(response, reply_markup=keyboard)
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.creator_only()
@@ -773,7 +817,7 @@ async def set_mode_clash(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Режим изменён на {get_theme_name(MODE_CLASH)}.\n"
         f"Доступно слов: {len(words)}"
     )
-
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.creator_only()
@@ -802,7 +846,7 @@ async def set_mode_dota(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Режим изменён на {get_theme_name(MODE_DOTA)}.\n"
         f"Доступно героев: {len(words)}"
     )
-
+@subscription_required
 @decorators.rate_limit()
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -924,6 +968,9 @@ async def main():
         CommandHandler("menu", start),
         CommandHandler("stats", show_stats),
     ]
+    application.add_handler(
+    CallbackQueryHandler(check_subscription_callback, pattern="check_subscription")
+)
     
     for handler in handlers:
         application.add_handler(handler)
