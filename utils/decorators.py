@@ -1,5 +1,3 @@
-
-
 import asyncio
 import time
 import logging
@@ -29,7 +27,6 @@ class RoomLocks:
     
     def cleanup(self, max_age_hours: int = 24):
         """Очистка старых блокировок (можно вызывать периодически)"""
-
         pass
 
 
@@ -95,7 +92,7 @@ class BotDecorators:
     def __init__(self, db_instance, room_locks_instance: Optional[RoomLocks] = None):
         """
         Args:
-            db_instance: Экземпляр класса Database
+            db_instance: Экземпляр класса database
             room_locks_instance: Экземпляр RoomLocks (опционально)
         """
         self.db = db_instance
