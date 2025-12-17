@@ -74,7 +74,6 @@ async def main():
         CommandHandler("cards", show_cards),
         CommandHandler("mode_clash", set_mode_clash),
         CommandHandler("mode_dota", set_mode_dota),
-        CommandHandler("help", start),
         CommandHandler("menu", start),
         CommandHandler("stats", show_stats),
     ]

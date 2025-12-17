@@ -18,34 +18,32 @@ DEFAULT_MODE = MODE_CLASH
 
 decorators = create_decorators(db)
 
-async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE)->None:
+async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
+
     room_id = await db.get_user_room(user_id)
     if room_id:
         room = await db.get_room(room_id)
         mode = room.get("mode", DEFAULT_MODE) if room else DEFAULT_MODE
     else:
         mode = DEFAULT_MODE
+
     theme_name = get_theme_name(mode)
     await context.bot.send_message(
-        chat_id=user_id,
-        text=(
-            "🎮 Добро пожаловать в игру 'Шпион'!\n\n"
-            "📌 Используйте кнопки ниже или команды:\n"
-            "/create - создать комнату\n"
-            "/join <ID комнаты> - присоединиться к комнате\n"
-            "/startgame - начать игру\n"
-            "/restart - перезапустить игру\n"
-            "/word - узнать своё слово (в личке с ботом)\n"
-            "/cards - посмотреть все карты\n"
-            "/rules - правила игры\n\n"
-            f"🎴 Текущая тематика: {theme_name}\n"
-            "Доступные режимы: ClashRoyale и Dota2\n"
-            "Создатель комнаты может сменить режим командами /mode_clash и /mode_dota\n\n"
-            "👥 Игру создали It tut Денис и Артур!"
-        ),
-        reply_markup=keyboard,
-    )
+    chat_id=user_id,
+    text=(
+        f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
+        f"📌 <b>Команды для начала:</b>\n"
+        f"• /create — создать комнату\n"
+        f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
+        f"• /startgame — начать игру\n\n"
+        f"🎴 <b>Текущая тематика:</b> {theme_name}\n"
+        f"👑 Игру создали It tut Денис и Артур!"
+    ),
+    parse_mode=ParseMode.HTML,
+    reply_markup=keyboard
+)
+    
 async def check_subscription_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 )->None:
@@ -190,7 +188,7 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-
+@decorators.game_not_started()
 @subscription_required
 @decorators.rate_limit()
 @decorators.creator_only()
@@ -768,6 +766,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif text == "🚪 Выйти из комнаты":
         await leave_room(update, context)
     elif text == "ℹ️ Помощь" or text == "🏠 Главное меню":
+        user_id = update.effective_user.id
+        room_id = await db.get_user_room(user_id)
+
+        if room_id:
+            await leave_room(update, context)
+
         await start(update, context)
     elif text.isdigit() and len(text) == 4:
         context.args = [text]
