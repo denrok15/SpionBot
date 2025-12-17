@@ -1,7 +1,3 @@
 /venv
 /.env
 /const.py
-.gitignore
-venv
-requirements.txt
-.example.const.py
