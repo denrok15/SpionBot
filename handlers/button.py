@@ -3,13 +3,11 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(
         [
             ["🎮 Создать комнату", "🔗 Присоединиться"],
-            ["▶️ Начать игру", "🔄 Перезапустить"],
-            ["📖 Правила","🚪 Выйти из комнаты"],
+            ["📖 Правила"],
         ],
         resize_keyboard=True,
         one_time_keyboard=False
     )
-
 def get_room_keyboard():
     return ReplyKeyboardMarkup(
         [
