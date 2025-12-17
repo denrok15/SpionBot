@@ -7,7 +7,6 @@ class CreateDB:
     """
     Подключение и создание базы данных
     """
-
     def __init__(self):
         self.pool = None
 

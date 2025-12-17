@@ -1,5 +1,4 @@
 import random
-
 from const import (
     MODE_CLASH,
     MODE_DOTA,

@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-
 import nest_asyncio
 from dotenv import load_dotenv
 from telegram import Update
@@ -12,7 +11,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-
 from database.actions import db
 from handlers.commands import (
     check_subscription_callback,

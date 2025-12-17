@@ -1,9 +1,6 @@
 from typing import List, Optional
-
 import asyncpg
-
 from database.init import db_init
-
 
 class ButtonCommand:
     def __init__(self, pool):

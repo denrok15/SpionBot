@@ -4,7 +4,6 @@ from telegram.error import BadRequest
 CHANNEL_USERNAME = "@it_tut0"
 CHANNEL_URL = "https://t.me/it_tut0"
 
-
 async def is_subscribed(bot, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
