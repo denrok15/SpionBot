@@ -1,11 +1,16 @@
-from utils.background import logger
 import asyncpg
+
+from utils.background import logger
+
+
 class CreateDB:
     """
     Подключение и создание базы данных
     """
+
     def __init__(self):
         self.pool = None
+
     async def connect(self, dsn: str, min_size: int = 5, max_size: int = 20):
         self.pool = await asyncpg.create_pool(
             dsn=dsn,
@@ -13,16 +18,16 @@ class CreateDB:
             max_size=max_size,
             command_timeout=60,
             server_settings={
-                'application_name': 'spy_game_bot',
-                'idle_in_transaction_session_timeout': '60000'
-            }
+                "application_name": "spy_game_bot",
+                "idle_in_transaction_session_timeout": "60000",
+            },
         )
         logger.info("Connected to PostgreSQL")
         await self.init_db()
 
     async def init_db(self):
         async with self.pool.acquire() as conn:
-            await conn.execute('''
+            await conn.execute("""
                 CREATE TABLE IF NOT EXISTS rooms (
                     id VARCHAR(10) PRIMARY KEY,
                     creator_id BIGINT NOT NULL,
@@ -35,9 +40,9 @@ class CreateDB:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '24 hours'
                 )
-            ''')
+            """)
 
-            await conn.execute('''
+            await conn.execute("""
                 CREATE TABLE IF NOT EXISTS players (
                     user_id BIGINT,
                     room_id VARCHAR(10),
@@ -48,5 +53,7 @@ class CreateDB:
                     PRIMARY KEY (user_id, room_id),
                     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
                 )
-            ''')
+            """)
+
+
 db_init = CreateDB()

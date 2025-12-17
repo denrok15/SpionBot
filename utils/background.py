@@ -1,6 +1,9 @@
-from utils.decorators import logger
 import asyncio
+
 from database.actions import db
+from utils.decorators import logger
+
+
 async def periodic_cleanup():
     """Фоновая задача для очистки старых данных"""
     while True:
@@ -15,4 +18,3 @@ async def periodic_cleanup():
             logger.error(f"Error in periodic cleanup: {e}")
 
         await asyncio.sleep(1800)  # Каждые 30 минут
-
