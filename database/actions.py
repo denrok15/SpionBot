@@ -168,7 +168,7 @@ class ButtonCommand:
             )
             return row["creator_id"] if row else None
 
-    async def transfer_room_ownership(self, room_id: str, new_creator_id: int):
+    async def transfer_room_ownership(self, room_id: str, new_creator_id: int)->None:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "UPDATE rooms SET creator_id = $1 WHERE id = $2",
@@ -176,7 +176,7 @@ class ButtonCommand:
                 room_id,
             )
 
-    async def cleanup_old_rooms(self):
+    async def cleanup_old_rooms(self)->None:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "DELETE FROM rooms WHERE expires_at < NOW() - INTERVAL '1 hour'"

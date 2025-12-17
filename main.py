@@ -104,6 +104,5 @@ async def main():
         if db.pool:
             await db.pool.close()
 
-
 if __name__ == "__main__":
     asyncio.run(main())

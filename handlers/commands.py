@@ -19,7 +19,7 @@ from utils.subscription import is_subscribed, subscribe_keyboard
 DEFAULT_MODE = MODE_CLASH
 
 
-async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
+async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE)->None:
     keyboard = get_main_keyboard()
     room_id = await db.get_user_room(user_id)
     if room_id:
@@ -51,7 +51,7 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_subscription_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
-):
+)->None:
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
@@ -69,7 +69,7 @@ async def check_subscription_callback(
 
 
 @decorators.rate_limit()
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
     user_id = update.effective_user.id
     if not await is_subscribed(context.bot, user_id):
         await update.message.reply_text(
@@ -82,24 +82,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
-async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
     user_id = update.effective_user.id
-
     for _ in range(10):
         room_id = str(random.randint(1000, 9999))
-
         room = await db.get_room(room_id)
-
         if not room:
             break
-
     else:
         await update.message.reply_text(
             "❌ Не удалось создать комнату. Попробуйте ещё раз."
         )
-
         return
-
     success = await db.create_room(room_id, user_id, DEFAULT_MODE)
 
     if not success:
@@ -205,7 +199,7 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
-async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
     user_id = update.effective_user.id
 
     logger.info(f"🔄 USER {user_id} пытается начать игру")
