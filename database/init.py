@@ -20,7 +20,7 @@ class CreateDB:
         )
         logger.info("Connected to PostgreSQL")
         await self.init_db()
-    async def __init_db(self):
+    async def init_db(self):
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS rooms (
