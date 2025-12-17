@@ -222,6 +222,4 @@ class ButtonCommand:
             await conn.execute(
                 "DELETE FROM image_cache WHERE cached_at < CURRENT_TIMESTAMP - INTERVAL '30 days'"
             )
-
-
 db = ButtonCommand(db_init.pool)

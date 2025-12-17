@@ -46,8 +46,6 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE)->None
         ),
         reply_markup=keyboard,
     )
-
-
 async def check_subscription_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 )->None:

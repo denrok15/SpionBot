@@ -1,8 +1,6 @@
 import asyncpg
-
-from utils.background import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 class CreateDB:
     """
     Подключение и создание базы данных
@@ -53,6 +51,4 @@ class CreateDB:
                     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
                 )
             """)
-
-
 db_init = CreateDB()
