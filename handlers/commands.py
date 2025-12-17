@@ -3,7 +3,7 @@ from const import (
     MODE_CLASH,
     MODE_DOTA,
 )
-from telegram import Update
+from telegram import Update, LabeledPrice
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -543,6 +543,18 @@ async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             except:
                 pass
+        if len(players) == 1:
+            await db.reset_room_game(room_id)
+
+            try:
+                await context.bot.send_message(
+                    players[0],
+                    "⚠️ В комнате остался только один игрок, игра остановлена. "
+                    "Когда появятся новые участники, нажмите ▶️ Начать игру.",
+                )
+
+            except:
+                pass
 
     keyboard = get_main_keyboard()
 
@@ -567,16 +579,31 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     theme_name = get_theme_name(mode)
 
     await update.message.reply_text(
-        "📖 Правила игры 'Шпион':\n\n"
-        "1) Все игроки кроме шпиона видят одинаковое слово\n"
-        "2) Шпион не знает слово\n"
-        "3) Игроки по очереди задают вопросы о слове\n"
-        "4) Цель шпиона - определить слово\n"
-        "5) Цель остальных - вычислить шпиона\n\n"
-        f"🖼️ Каждому слову соответствует объект из выбранной игры ({theme_name})!\n"
-        "Игра проходит устно, бот только раздаёт роли!",
-        reply_markup=keyboard,
-    )
+    "🕵️ *Игра «Шпион» — правила*\n\n"
+
+    "👥 *Роли*\n\n"
+    "• 🧑‍🤝‍🧑 Все игроки, кроме одного, получают *одно и то же слово*\n"
+    "• 🕶️ *Шпион* — единственный, кто *не знает слово*\n\n"
+
+    "🗣️ *Ход игры*\n\n"
+    "1️⃣ Игроки по очереди задают вопросы о загаданном слове\n"
+    "2️⃣ Вопросы должны помогать определить, кто шпион\n"
+    "3️⃣ Отвечать нужно честно, *не называя слово напрямую*\n\n"
+
+    "🎯 *Цели*\n\n"
+    "• 🕶️ *Шпион*: понять, какое слово загадано\n"
+    "• 🧑‍🤝‍🧑 *Остальные игроки*: вычислить шпиона\n\n"
+
+    f"🎴 *Тематика*: {theme_name}\n"
+    "🖼️ Каждому слову соответствует объект из выбранной игры\n\n"
+
+    "ℹ️ *Важно*\n\n"
+    "Игра проходит *устно* — бот только раздаёт роли и управляет игрой\n\n"
+    "Удачной игры и приятного разоблачения 😈",
+    parse_mode=ParseMode.MARKDOWN,
+    reply_markup=keyboard,
+)
+
 
 
 @subscription_required
@@ -788,3 +815,38 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except:
             pass
+
+async def donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Отправляет пользователю инвойс для доната через Telegram Stars (XTR)
+    """
+    prices = [LabeledPrice(label="Поддержка автора", amount=100)]
+    await context.bot.send_invoice(
+        chat_id=update.effective_chat.id,
+        title="Поддержка автора",
+        description="Спасибо за поддержку! Каждая звезда помогает развивать бота.",
+        payload="donate_payload",
+        currency="XTR",
+        prices=prices,
+        start_parameter="donate",
+        provider_token="",
+    )
+
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Telegram присылает pre_checkout_query перед оплатой.
+    Нужно подтвердить, что платеж можно принять
+    """
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    После успешной оплаты можно поблагодарить пользователя
+    """
+    payment = update.message.successful_payment
+    await update.message.reply_text(
+        f"Спасибо за поддержку! Вы пожертвовали {payment.total_amount / 100} звёзд."
+    )

@@ -10,6 +10,7 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     filters,
+    PreCheckoutQueryHandler,
 )
 from database.actions import db
 from handlers.commands import (
@@ -29,6 +30,9 @@ from handlers.commands import (
     start,
     start_game,
     error_handler,
+    donate,
+    successful_payment_callback,
+    precheckout_callback,
 )
 from utils.background import periodic_cleanup
 
@@ -80,6 +84,9 @@ async def main():
     application.add_handler(
         CallbackQueryHandler(check_subscription_callback, pattern="check_subscription")
     )
+    application.add_handler(CommandHandler("donate", donate))
+    application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     for handler in handlers:
         application.add_handler(handler)
     application.add_handler(
