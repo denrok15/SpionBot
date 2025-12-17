@@ -1,6 +1,6 @@
 from utils.decorators import logger
 import asyncio
-from database.crud import db
+from database.actions import db
 async def periodic_cleanup():
     """Фоновая задача для очистки старых данных"""
     while True:

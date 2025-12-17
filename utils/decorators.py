@@ -92,7 +92,7 @@ class BotDecorators:
     def __init__(self, db_instance, room_locks_instance: Optional[RoomLocks] = None):
         """
         Args:
-            db_instance: Экземпляр класса database
+            db_instance: Экземпляр класса ButtonCommand
             room_locks_instance: Экземпляр RoomLocks (опционально)
         """
         self.db = db_instance

@@ -1,12 +1,12 @@
 from telegram.ext import ContextTypes
 from telegram import Update
 from main import decorators
-from utils.other import get_theme_name,get_words_and_cards_by_mode
+from utils.gameMod import get_theme_name,get_words_and_cards_by_mode
 from handlers.button import get_room_keyboard,get_main_keyboard
 import random
 from telegram.constants import ParseMode
 from utils.decorators import logger,room_locks
-from database.crud import db
+from database.actions import db
 from const import (
     dotaImages,
     namesDota,
