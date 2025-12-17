@@ -156,11 +156,12 @@ class ButtonCommand(CreateDB):
     async def get_user_room(self, user_id: int) -> Optional[str]:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-        'SELECT players.room_id FROM players '
-        'JOIN rooms ON players.room_id = rooms.id '
-        'WHERE players.user_id = $1 AND rooms.game_started = FALSE '
-        'ORDER BY rooms.created_at DESC LIMIT 1', user_id
-        )
+                "SELECT players.room_id FROM players "
+                "JOIN rooms ON players.room_id = rooms.id "
+                "WHERE players.user_id = $1 "
+                "ORDER BY rooms.created_at DESC LIMIT 1",
+                user_id,
+            )
             return row['room_id'] if row else None
 
     async def get_room_creator(self, room_id: str) -> Optional[int]:

@@ -396,8 +396,6 @@ async def get_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     room_id = await db.get_user_room(user_id)
 
-    room_id = await db.get_user_room(user_id)
-
     if not room_id:
         await update.message.reply_text("❌ Вы не в игре!")
 
