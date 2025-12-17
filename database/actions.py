@@ -1,11 +1,13 @@
 from typing import List, Optional
 import asyncpg
-from database.init import db_init
+from database.init import db_init, CreateDB
+import logging
 
-class ButtonCommand:
+logger = logging.getLogger(__name__)
+
+class ButtonCommand(CreateDB):
     def __init__(self, pool):
         self.pool = pool
-
     async def create_room(
         self, room_id: str, creator_id: int, mode: str = "clash"
     ) -> bool:
@@ -154,9 +156,12 @@ class ButtonCommand:
     async def get_user_room(self, user_id: int) -> Optional[str]:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT room_id FROM players WHERE user_id = $1 LIMIT 1", user_id
-            )
-            return row["room_id"] if row else None
+        'SELECT players.room_id FROM players '
+        'JOIN rooms ON players.room_id = rooms.id '
+        'WHERE players.user_id = $1 AND rooms.game_started = FALSE '
+        'ORDER BY rooms.created_at DESC LIMIT 1', user_id
+        )
+            return row['room_id'] if row else None
 
     async def get_room_creator(self, room_id: str) -> Optional[int]:
         async with self.pool.acquire() as conn:
