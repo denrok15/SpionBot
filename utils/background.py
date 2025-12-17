@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from database.actions import db
-
 logger = logging.getLogger(__name__)
 
 async def periodic_cleanup():

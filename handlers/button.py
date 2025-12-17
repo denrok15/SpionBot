@@ -1,6 +1,4 @@
 from telegram import ReplyKeyboardMarkup
-
-
 def get_main_keyboard()->ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [

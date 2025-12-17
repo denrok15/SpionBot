@@ -7,16 +7,16 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-
+from utils.decorators import create_decorators
 from database.actions import db
 from handlers.button import get_main_keyboard, get_room_keyboard
-from main import decorators
 from utils.decorators import logger, room_locks, subscription_required
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 from utils.subscription import is_subscribed, subscribe_keyboard
 
 DEFAULT_MODE = MODE_CLASH
 
+decorators = create_decorators(db)
 
 async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE)->None:
     keyboard = get_main_keyboard()
@@ -63,7 +63,6 @@ async def check_subscription_callback(
                 await query.message.edit_text(new_text, reply_markup=new_markup)
             except BadRequest:
                 pass
-
 
 @decorators.rate_limit()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:

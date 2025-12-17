@@ -31,7 +31,6 @@ from handlers.commands import (
     error_handler,
 )
 from utils.background import periodic_cleanup
-from utils.decorators import create_decorators
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -39,7 +38,6 @@ logging.basicConfig(
 nest_asyncio.apply()
 logger = logging.getLogger(__name__)
 load_dotenv()
-decorators = create_decorators(db)
 async def main():
     API_TOKEN = os.getenv("API_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
