@@ -114,6 +114,14 @@ class ButtonCommand(CreateDB):
                 room_id,
             )
 
+    async def remove_player_from_all_rooms(self, user_id: int) -> None:
+        """Полностью очищает пользователя из всех комнат (на случай рассинхронов)."""
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM players WHERE user_id = $1",
+                user_id,
+            )
+
     async def get_room_players(self, room_id: str) -> List[int]:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(

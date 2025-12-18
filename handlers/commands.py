@@ -155,8 +155,15 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         current_room = await db.get_user_room(user_id)
 
-        if current_room == room_id:
-            await update.message.reply_text("❌ Вы уже в этой комнате!")
+        if current_room:
+            if current_room == room_id:
+                await update.message.reply_text("❌ Вы уже в этой комнате!")
+
+                return
+
+            await update.message.reply_text(
+                "❌ Сначала выйдите из текущей комнаты, чтобы присоединиться к другой."
+            )
 
             return
 
@@ -556,6 +563,7 @@ async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
+    await db.remove_player_from_all_rooms(user_id)
     keyboard = get_main_keyboard()
 
     await update.message.reply_text("✅ Вы вышли из комнаты!", reply_markup=keyboard)
@@ -750,25 +758,29 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = await db.get_user_room(user_id)
 
     if room_id:
-        players = await db.get_room_players(room_id)
+        player_data = await db.get_player_data(user_id, room_id)
 
-        room = await db.get_room(room_id)
+        if player_data:
+            players = await db.get_room_players(room_id)
 
-        await update.message.reply_text(
-            f"📊 Статистика комнаты {room_id}:\n\n"
-            f"👥 Игроков: {len(players)}\n"
-            f"🎯 Режим: {get_theme_name(room['mode'])}\n"
-            f"🎮 Игра начата: {'Да' if room['game_started'] else 'Нет'}\n"
-            f"📅 Создана: {room['created_at'].strftime('%Y-%m-%d %H:%M')}"
-        )
-    else:
-        stats = await db.get_all_rooms_stats()
-        await update.message.reply_text(
-            f"📊 Общая статистика бота:\n\n"
-            f"🏠 Всего комнат: {stats['total_rooms']}\n"
-            f"🎮 Активных игр: {stats['active_rooms']}\n"
-            f"👤 Всего игроков: {stats['total_players']}"
-        )
+            room = await db.get_room(room_id)
+
+            await update.message.reply_text(
+                f"📊 Статистика комнаты {room_id}:\n\n"
+                f"👥 Игроков: {len(players)}\n"
+                f"🎯 Режим: {get_theme_name(room['mode'])}\n"
+                f"🎮 Игра начата: {'Да' if room['game_started'] else 'Нет'}\n"
+                f"📅 Создана: {room['created_at'].strftime('%Y-%m-%d %H:%M')}"
+            )
+            return
+
+    stats = await db.get_all_rooms_stats()
+    await update.message.reply_text(
+        f"📊 Общая статистика бота:\n\n"
+        f"🏠 Всего комнат: {stats['total_rooms']}\n"
+        f"🎮 Активных игр: {stats['active_rooms']}\n"
+        f"👤 Всего игроков: {stats['total_players']}"
+    )
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
