@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+
 import nest_asyncio
 from dotenv import load_dotenv
 from telegram import Update
@@ -9,17 +10,21 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
-    filters,
     PreCheckoutQueryHandler,
+    filters,
 )
+
 from database.actions import db
 from handlers.commands import (
     check_subscription_callback,
     create_room,
+    donate,
+    error_handler,
     get_word,
     handle_text_message,
     join_room,
     leave_room,
+    precheckout_callback,
     restart_game,
     rules,
     set_mode_clash,
@@ -29,12 +34,9 @@ from handlers.commands import (
     show_stats,
     start,
     start_game,
-    error_handler,
-    donate,
     successful_payment_callback,
-    precheckout_callback,
 )
-from utils.background import periodic_cleanup
+from utils.background import generate_clue, periodic_cleanup
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -62,6 +64,9 @@ async def main():
         return
 
     asyncio.create_task(periodic_cleanup())
+    asyncio.create_task(generate_clue())
+
+
 
     application = Application.builder().token(API_TOKEN).build()
 
