@@ -6,7 +6,10 @@ from const import (
     dotaImages,
     namesDota,
 )
+
 DEFAULT_MODE = MODE_CLASH
+
+
 def get_words_and_cards_by_mode(mode: str):
     if mode == MODE_DOTA:
         return namesDota, dotaImages

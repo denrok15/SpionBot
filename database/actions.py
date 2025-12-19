@@ -1,13 +1,17 @@
-from typing import List, Optional
-import asyncpg
-from database.init import db_init, CreateDB
 import logging
+from typing import List, Optional
+
+import asyncpg
+
+from database.init import CreateDB, db_init
 
 logger = logging.getLogger(__name__)
+
 
 class ButtonCommand(CreateDB):
     def __init__(self, pool):
         self.pool = pool
+
     async def create_room(
         self, room_id: str, creator_id: int, mode: str = "clash"
     ) -> bool:
@@ -162,7 +166,7 @@ class ButtonCommand(CreateDB):
                 "ORDER BY rooms.created_at DESC LIMIT 1",
                 user_id,
             )
-            return row['room_id'] if row else None
+            return row["room_id"] if row else None
 
     async def get_room_creator(self, room_id: str) -> Optional[int]:
         async with self.pool.acquire() as conn:
@@ -171,7 +175,7 @@ class ButtonCommand(CreateDB):
             )
             return row["creator_id"] if row else None
 
-    async def transfer_room_ownership(self, room_id: str, new_creator_id: int)->None:
+    async def transfer_room_ownership(self, room_id: str, new_creator_id: int) -> None:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "UPDATE rooms SET creator_id = $1 WHERE id = $2",
@@ -179,7 +183,7 @@ class ButtonCommand(CreateDB):
                 room_id,
             )
 
-    async def cleanup_old_rooms(self)->None:
+    async def cleanup_old_rooms(self) -> None:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "DELETE FROM rooms WHERE expires_at < NOW() - INTERVAL '1 hour'"
@@ -228,4 +232,6 @@ class ButtonCommand(CreateDB):
             await conn.execute(
                 "DELETE FROM image_cache WHERE cached_at < CURRENT_TIMESTAMP - INTERVAL '30 days'"
             )
+
+
 db = ButtonCommand(db_init.pool)

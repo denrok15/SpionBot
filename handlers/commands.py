@@ -1,22 +1,29 @@
 import random
+
+from telegram import LabeledPrice, Update
+from telegram.constants import ParseMode
+from telegram.error import BadRequest
+from telegram.ext import ContextTypes
+
 from const import (
     MODE_CLASH,
     MODE_DOTA,
 )
-from telegram import Update, LabeledPrice
-from telegram.constants import ParseMode
-from telegram.error import BadRequest
-from telegram.ext import ContextTypes
-from utils.decorators import create_decorators
 from database.actions import db
 from handlers.button import get_main_keyboard, get_room_keyboard
-from utils.decorators import logger, room_locks, subscription_required
+from utils.decorators import (
+    create_decorators,
+    logger,
+    room_locks,
+    subscription_required,
+)
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 from utils.subscription import is_subscribed, subscribe_keyboard
 
 DEFAULT_MODE = MODE_CLASH
 
 decorators = create_decorators(db)
+
 
 async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
@@ -30,23 +37,24 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
 
     theme_name = get_theme_name(mode)
     await context.bot.send_message(
-    chat_id=user_id,
-    text=(
-        f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
-        f"📌 <b>Команды для начала:</b>\n"
-        f"• /create — создать комнату\n"
-        f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
-        f"• /startgame — начать игру\n\n"
-        f"🎴 <b>Текущая тематика:</b> {theme_name}\n"
-        f"👑 Игру создали It tut Денис и Артур!"
-    ),
-    parse_mode=ParseMode.HTML,
-    reply_markup=keyboard
-)
-    
+        chat_id=user_id,
+        text=(
+            f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
+            f"📌 <b>Команды для начала:</b>\n"
+            f"• /create — создать комнату\n"
+            f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
+            f"• /startgame — начать игру\n\n"
+            f"🎴 <b>Текущая тематика:</b> {theme_name}\n"
+            f"👑 Игру создали It tut Денис и Артур!"
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=keyboard,
+    )
+
+
 async def check_subscription_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
-)->None:
+) -> None:
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
@@ -62,8 +70,9 @@ async def check_subscription_callback(
             except BadRequest:
                 pass
 
+
 @decorators.rate_limit()
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if not await is_subscribed(context.bot, user_id):
         await update.message.reply_text(
@@ -76,7 +85,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
 @subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
-async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
+async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     for _ in range(10):
         room_id = str(random.randint(1000, 9999))
@@ -188,12 +197,13 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
+
 @decorators.game_not_started()
 @subscription_required
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
-async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE)->None:
+async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
     logger.info(f"🔄 USER {user_id} пытается начать игру")
@@ -579,31 +589,25 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     theme_name = get_theme_name(mode)
 
     await update.message.reply_text(
-    "🕵️ *Игра «Шпион» — правила*\n\n"
-
-    "👥 *Роли*\n\n"
-    "• 🧑‍🤝‍🧑 Все игроки, кроме одного, получают *одно и то же слово*\n"
-    "• 🕶️ *Шпион* — единственный, кто *не знает слово*\n\n"
-
-    "🗣️ *Ход игры*\n\n"
-    "1️⃣ Игроки по очереди задают вопросы о загаданном слове\n"
-    "2️⃣ Вопросы должны помогать определить, кто шпион\n"
-    "3️⃣ Отвечать нужно честно, *не называя слово напрямую*\n\n"
-
-    "🎯 *Цели*\n\n"
-    "• 🕶️ *Шпион*: понять, какое слово загадано\n"
-    "• 🧑‍🤝‍🧑 *Остальные игроки*: вычислить шпиона\n\n"
-
-    f"🎴 *Тематика*: {theme_name}\n"
-    "🖼️ Каждому слову соответствует объект из выбранной игры\n\n"
-
-    "ℹ️ *Важно*\n\n"
-    "Игра проходит *устно* — бот только раздаёт роли и управляет игрой\n\n"
-    "Удачной игры и приятного разоблачения 😈",
-    parse_mode=ParseMode.MARKDOWN,
-    reply_markup=keyboard,
-)
-
+        "🕵️ *Игра «Шпион» — правила*\n\n"
+        "👥 *Роли*\n\n"
+        "• 🧑‍🤝‍🧑 Все игроки, кроме одного, получают *одно и то же слово*\n"
+        "• 🕶️ *Шпион* — единственный, кто *не знает слово*\n\n"
+        "🗣️ *Ход игры*\n\n"
+        "1️⃣ Игроки по очереди задают вопросы о загаданном слове\n"
+        "2️⃣ Вопросы должны помогать определить, кто шпион\n"
+        "3️⃣ Отвечать нужно честно, *не называя слово напрямую*\n\n"
+        "🎯 *Цели*\n\n"
+        "• 🕶️ *Шпион*: понять, какое слово загадано\n"
+        "• 🧑‍🤝‍🧑 *Остальные игроки*: вычислить шпиона\n\n"
+        f"🎴 *Тематика*: {theme_name}\n"
+        "🖼️ Каждому слову соответствует объект из выбранной игры\n\n"
+        "ℹ️ *Важно*\n\n"
+        "Игра проходит *устно* — бот только раздаёт роли и управляет игрой\n\n"
+        "Удачной игры и приятного разоблачения 😈",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=keyboard,
+    )
 
 
 @subscription_required
@@ -770,6 +774,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👤 Всего игроков: {stats['total_players']}"
         )
 
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     # user_id = update.effective_user.id не используется в функции
@@ -806,6 +811,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         await update.message.reply_text("Используйте кнопки меню или команды.")
 
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
     if update and update.effective_chat:
@@ -815,6 +821,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except:
             pass
+
 
 async def donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -842,7 +849,9 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer(ok=True)
 
 
-async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def successful_payment_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
     """
     После успешной оплаты можно поблагодарить пользователя
     """

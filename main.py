@@ -44,6 +44,8 @@ logging.basicConfig(
 nest_asyncio.apply()
 logger = logging.getLogger(__name__)
 load_dotenv()
+
+
 async def main():
     API_TOKEN = os.getenv("API_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
@@ -65,8 +67,6 @@ async def main():
 
     asyncio.create_task(periodic_cleanup())
     asyncio.create_task(generate_clue())
-
-
 
     application = Application.builder().token(API_TOKEN).build()
 
@@ -91,7 +91,9 @@ async def main():
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+    application.add_handler(
+        MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback)
+    )
     for handler in handlers:
         application.add_handler(handler)
     application.add_handler(
@@ -110,6 +112,7 @@ async def main():
     finally:
         if db.pool:
             await db.pool.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
