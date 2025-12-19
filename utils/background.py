@@ -1,13 +1,17 @@
 import asyncio
 import logging
 
+from const import PROMPTS, game_array
 from database.actions import db
 from utils.clue import clue_obj
-from utils.llm import PROMPTS, ask_llm
+from utils.llm import ask_llm
+
+sem = asyncio.Semaphore(3)
 
 logger = logging.getLogger(__name__)
 
-async def periodic_cleanup()->None:
+
+async def periodic_cleanup() -> None:
     """Фоновая задача для очистки старых данных"""
     while True:
         try:
@@ -19,13 +23,17 @@ async def periodic_cleanup()->None:
             logger.error(f"Error in periodic cleanup: {e}")
         await asyncio.sleep(1800)
 
-async def generate_clue()->None:
+
+async def generate_clue() -> None:
+    await asyncio.sleep(1800)
     while True:
-        for prompt in PROMPTS:
-            try:
-                result = await ask_llm(prompt)
-                setattr(clue_obj, f"clue_{prompt}", result)
-                logger.info("Подсказки обновлены")
-            except Exception as e:
-                logger.error(f"Error in generate_clue: {e}")
-            await asyncio.sleep(1800)
+        async with sem:
+            for game in PROMPTS:
+                for Heroname in game_array[game]:
+                    try:
+                        result = await ask_llm(PROMPTS[game].format(Heroname=Heroname))
+                        getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]
+                    except Exception as e:
+                        logger.error(f"Error in generate_clue: {e}")
+                logger.info(f"Подсказки для {game} обновлены")
+        await asyncio.sleep(1800)
