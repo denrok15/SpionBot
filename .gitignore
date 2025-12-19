@@ -1,3 +1,6 @@
 /venv
 /.env
 /const.py
+const.py
+.gitignore
+.env
