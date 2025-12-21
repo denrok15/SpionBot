@@ -54,7 +54,7 @@ class CreateDB:
                     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (user_id, room_id),
                     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
-                )ч
+                )
             """)
 
 
