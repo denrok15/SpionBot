@@ -33,6 +33,7 @@ async def generate_clue() -> None:
                     try:
                         result = await ask_llm(PROMPTS[game].format(Heroname=Heroname))
                         getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]
+                        logger.info(f"Generated clue: {result}")
                     except Exception as e:
                         logger.error(f"Error in generate_clue: {e}")
                 logger.info(f"Подсказки для {game} обновлены")
