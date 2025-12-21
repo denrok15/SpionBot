@@ -1,6 +1,6 @@
 import logging
 import os
-
+import json
 import requests
 from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
@@ -9,8 +9,7 @@ load_dotenv()
 API_KEY_LLM = os.getenv("API_KEY_LLM")
 URL_LLM = os.getenv("URL_LLM")
 
-
-async def ask_llm(promt: str) -> str:
+def ask_llm(promt: str) -> dict:
     headers = {
         "Authorization": f"Bearer {API_KEY_LLM}",
         "Content-Type": "application/json",
@@ -26,4 +25,6 @@ async def ask_llm(promt: str) -> str:
     response = requests.post(URL_LLM, headers=headers, json=payload)
     response.raise_for_status()
     logger.info("получен ответ от нейросети")
-    return response.json()["choices"][0]["message"]["content"]
+    content = response.json()["choices"][0]["message"]["content"]
+    data = json.loads(content)
+    return data
