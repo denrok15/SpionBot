@@ -1,3 +1,5 @@
 /venv
 /.env
 /const.py
+/.ruff_cache
+/.pycache

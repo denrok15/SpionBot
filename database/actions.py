@@ -236,4 +236,78 @@ class ButtonCommand(CreateDB):
             await conn.execute(
                 "DELETE FROM image_cache WHERE cached_at < CURRENT_TIMESTAMP - INTERVAL '30 days'"
             )
+
+    async def ensure_user_account(self, user_id: int):
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO user_accounts (user_id)
+                VALUES ($1)
+                ON CONFLICT (user_id) DO NOTHING
+                """,
+                user_id,
+            )
+
+    async def get_user_account(self, user_id: int) -> Optional[dict]:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT user_id, balance, hard_hints, medium_hints, easy_hints FROM user_accounts WHERE user_id = $1",
+                user_id,
+            )
+            return dict(row) if row else None
+
+    async def add_balance(self, user_id: int, amount: int) -> Optional[int]:
+        if amount <= 0:
+            return None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO user_accounts (user_id, balance)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id) DO UPDATE
+                SET balance = user_accounts.balance + EXCLUDED.balance
+                RETURNING balance
+                """,
+                user_id,
+                amount,
+            )
+            return row["balance"] if row else None
+
+    async def purchase_hints(
+        self,
+        user_id: int,
+        cost: int,
+        hard: int = 0,
+        medium: int = 0,
+        easy: int = 0,
+    ) -> Optional[dict]:
+        if cost < 0 or (hard < 0 or medium < 0 or easy < 0):
+            return None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO user_accounts (user_id)
+                    VALUES ($1)
+                    ON CONFLICT (user_id) DO NOTHING
+                    """,
+                    user_id,
+                )
+                row = await conn.fetchrow(
+                    """
+                    UPDATE user_accounts
+                    SET balance = balance - $2,
+                        hard_hints = hard_hints + $3,
+                        medium_hints = medium_hints + $4,
+                        easy_hints = easy_hints + $5
+                    WHERE user_id = $1 AND balance >= $2
+                    RETURNING balance, hard_hints, medium_hints, easy_hints
+                    """,
+                    user_id,
+                    cost,
+                    hard,
+                    medium,
+                    easy,
+                )
+                return dict(row) if row else None
 db = ButtonCommand(db_init.pool)
