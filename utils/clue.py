@@ -19,4 +19,6 @@ class UserClue:
     ):
         number = random.randint(0, 5)
         return self.clues[game][hero][complexity][number]
+
+
 clue_obj = UserClue()

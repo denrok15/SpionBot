@@ -1,13 +1,16 @@
+import json
 import logging
 import os
-import json
+
 import requests
 from dotenv import load_dotenv
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
 API_KEY_LLM = os.getenv("API_KEY_LLM")
 URL_LLM = os.getenv("URL_LLM")
+
 
 def ask_llm(promt: str) -> dict:
     headers = {
@@ -29,7 +32,10 @@ def ask_llm(promt: str) -> dict:
     data = json.loads(content)
     return data
 
-print(type(ask_llm("""
+
+print(
+    type(
+        ask_llm("""
 Ты — профессиональный генератор подсказок для игры «Шпион».
     Тема: герои Dota 2.
     
@@ -83,4 +89,6 @@ print(type(ask_llm("""
     - Использовать точные английские имена героев как ключи JSON
     - Язык подсказок: русский
     - Никакого текста вне JSON
-""")))
+""")
+    )
+)

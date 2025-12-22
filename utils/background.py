@@ -31,7 +31,9 @@ async def generate_clue() -> None:
             for game in PROMPTS:
                 for Heroname in game_array[game]:
                     try:
-                        result = await ask_llm(PROMPTS[game].format(Heroname=Heroname))
+                        result = await ask_llm(
+                            PROMPTS[game].replace("{Heroname}", Heroname)
+                        )
                         getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]
                         logger.info(f"Generated clue: {result}")
                     except Exception as e:
