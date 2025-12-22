@@ -1,5 +1,7 @@
 from telegram import ReplyKeyboardMarkup
-def get_main_keyboard()->ReplyKeyboardMarkup:
+
+
+def get_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             ["🎮 Создать комнату", "🔗 Присоединиться"],
@@ -10,7 +12,7 @@ def get_main_keyboard()->ReplyKeyboardMarkup:
     )
 
 
-def get_room_keyboard()->ReplyKeyboardMarkup:
+def get_room_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             ["▶️ Начать игру", "🔄 Перезапустить"],

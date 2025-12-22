@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+
 import nest_asyncio
 from dotenv import load_dotenv
 from telegram import Update
@@ -9,17 +10,21 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
-    filters,
     PreCheckoutQueryHandler,
+    filters,
 )
+
 from database.actions import db
 from handlers.commands import (
     check_subscription_callback,
     create_room,
+    donate,
+    error_handler,
     get_word,
     handle_text_message,
     join_room,
     leave_room,
+    precheckout_callback,
     restart_game,
     rules,
     set_mode_clash,
@@ -29,8 +34,6 @@ from handlers.commands import (
     show_stats,
     start,
     start_game,
-    error_handler,
-    donate,
     successful_payment_callback,
     precheckout_callback,
     personal_account,
@@ -41,7 +44,7 @@ from handlers.commands import (
     cabinet_action_callback,
     donate_amount_callback,
 )
-from utils.background import periodic_cleanup
+from utils.background import generate_clue, periodic_cleanup
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -49,6 +52,8 @@ logging.basicConfig(
 nest_asyncio.apply()
 logger = logging.getLogger(__name__)
 load_dotenv()
+
+
 async def main():
     API_TOKEN = os.getenv("API_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
@@ -69,6 +74,7 @@ async def main():
         return
 
     asyncio.create_task(periodic_cleanup())
+    asyncio.create_task(generate_clue())
 
     application = Application.builder().token(API_TOKEN).build()
 
@@ -110,7 +116,9 @@ async def main():
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+    application.add_handler(
+        MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback)
+    )
     for handler in handlers:
         application.add_handler(handler)
     application.add_handler(
@@ -129,6 +137,7 @@ async def main():
     finally:
         if db.pool:
             await db.pool.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

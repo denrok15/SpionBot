@@ -1,12 +1,18 @@
-import asyncpg
 import logging
+
+import asyncpg
+
 logger = logging.getLogger(__name__)
+
+
 class CreateDB:
     """
     Подключение и создание базы данных
     """
+
     def __init__(self):
         self.pool = None
+
     async def connect(self, dsn: str, min_size: int = 5, max_size: int = 20):
         self.pool = await asyncpg.create_pool(
             dsn=dsn,
@@ -20,6 +26,7 @@ class CreateDB:
         )
         logger.info("Connected to PostgreSQL")
         await self.init_db()
+
     async def init_db(self):
         async with self.pool.acquire() as conn:
             await conn.execute("""
