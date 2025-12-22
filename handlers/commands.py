@@ -132,6 +132,18 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     keyboard = get_room_keyboard()
 
+    inline_keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                text="💡Подсказки",
+                callback_data="check_clue"
+            )
+        ]
+    ])
+    await update.message.reply_text(
+    "\u200b",
+    reply_markup=keyboard
+    )
     await update.message.reply_text(
         f"✅ Комната создана!\n\n"
         f"ID комнаты: <code>{room_id}</code>\n"
@@ -142,10 +154,8 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"Создатель комнаты может сменить режим командами /mode_clash и /mode_dota\n\n"
         f"Для начала игры нажмите '▶️ Начать игру'",
         parse_mode=ParseMode.HTML,
-        reply_markup=keyboard,
+        reply_markup=inline_keyboard,
     )
-
-
 @subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
@@ -1095,6 +1105,7 @@ async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("Количество должно быть целым неотрицательным числом.")
             return
+
         if quantity <= 0:
             await update.message.reply_text("Количество должно быть больше нуля.")
             return
