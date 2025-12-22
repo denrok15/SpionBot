@@ -1090,12 +1090,11 @@ async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        try:
+        if args[1].isdigit():
             quantity = int(args[1])
-        except ValueError:
-            await update.message.reply_text("Количество должно быть числом.")
+        else:
+            await update.message.reply_text("Количество должно быть целым неотрицательным числом.")
             return
-
         if quantity <= 0:
             await update.message.reply_text("Количество должно быть больше нуля.")
             return
