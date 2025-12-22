@@ -114,6 +114,9 @@ async def main():
     application.add_handler(
         CallbackQueryHandler(donate_amount_callback, pattern=r"^donate_amount:")
     )
+    application.add_handler(
+        CallbackQueryHandler(donate_amount_callback, pattern="check_clue")
+    )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(
