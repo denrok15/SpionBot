@@ -1,6 +1,5 @@
 /venv
 /.env
 /const.py
-const.py
-.gitignore
-.env
+/.ruff_cache
+/.pycache

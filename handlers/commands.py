@@ -9,6 +9,16 @@ from const import (
     MODE_CLASH,
     MODE_DOTA,
 )
+from telegram import (
+    Update,
+    LabeledPrice,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
+from telegram.constants import ParseMode
+from telegram.error import BadRequest
+from telegram.ext import ContextTypes
+from utils.decorators import create_decorators
 from database.actions import db
 from handlers.button import get_main_keyboard, get_room_keyboard
 from utils.decorators import (
@@ -19,11 +29,25 @@ from utils.decorators import (
 )
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 from utils.subscription import is_subscribed, subscribe_keyboard
-
 DEFAULT_MODE = MODE_CLASH
 
 decorators = create_decorators(db)
 
+HINT_PRICES = {
+    "hard": 1,
+    "medium": 2,
+    "easy": 3,
+}
+
+HINT_LABELS = {
+    "hard": "Хард",
+    "medium": "Медиум",
+    "easy": "Лёгкая (мелкая)",
+}
+
+HINT_QUANTITIES = [1, 2, 3]
+
+DONATE_AMOUNTS = [5, 10, 20]
 
 async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
@@ -164,8 +188,15 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         current_room = await db.get_user_room(user_id)
 
-        if current_room == room_id:
-            await update.message.reply_text("❌ Вы уже в этой комнате!")
+        if current_room:
+            if current_room == room_id:
+                await update.message.reply_text("❌ Вы уже в этой комнате!")
+
+                return
+
+            await update.message.reply_text(
+                "❌ Сначала выйдите из текущей комнаты, чтобы присоединиться к другой."
+            )
 
             return
 
@@ -566,6 +597,7 @@ async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
+    await db.remove_player_from_all_rooms(user_id)
     keyboard = get_main_keyboard()
 
     await update.message.reply_text("✅ Вы вышли из комнаты!", reply_markup=keyboard)
@@ -754,25 +786,29 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = await db.get_user_room(user_id)
 
     if room_id:
-        players = await db.get_room_players(room_id)
+        player_data = await db.get_player_data(user_id, room_id)
 
-        room = await db.get_room(room_id)
+        if player_data:
+            players = await db.get_room_players(room_id)
 
-        await update.message.reply_text(
-            f"📊 Статистика комнаты {room_id}:\n\n"
-            f"👥 Игроков: {len(players)}\n"
-            f"🎯 Режим: {get_theme_name(room['mode'])}\n"
-            f"🎮 Игра начата: {'Да' if room['game_started'] else 'Нет'}\n"
-            f"📅 Создана: {room['created_at'].strftime('%Y-%m-%d %H:%M')}"
-        )
-    else:
-        stats = await db.get_all_rooms_stats()
-        await update.message.reply_text(
-            f"📊 Общая статистика бота:\n\n"
-            f"🏠 Всего комнат: {stats['total_rooms']}\n"
-            f"🎮 Активных игр: {stats['active_rooms']}\n"
-            f"👤 Всего игроков: {stats['total_players']}"
-        )
+            room = await db.get_room(room_id)
+
+            await update.message.reply_text(
+                f"📊 Статистика комнаты {room_id}:\n\n"
+                f"👥 Игроков: {len(players)}\n"
+                f"🎯 Режим: {get_theme_name(room['mode'])}\n"
+                f"🎮 Игра начата: {'Да' if room['game_started'] else 'Нет'}\n"
+                f"📅 Создана: {room['created_at'].strftime('%Y-%m-%d %H:%M')}"
+            )
+            return
+
+    stats = await db.get_all_rooms_stats()
+    await update.message.reply_text(
+        f"📊 Общая статистика бота:\n\n"
+        f"🏠 Всего комнат: {stats['total_rooms']}\n"
+        f"🎮 Активных игр: {stats['active_rooms']}\n"
+        f"👤 Всего игроков: {stats['total_players']}"
+    )
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -797,6 +833,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await show_players(update, context)
     elif text == "🚪 Выйти из комнаты":
         await leave_room(update, context)
+    elif text == "👤 Личный кабинет":
+        await personal_account(update, context)
     elif text == "ℹ️ Помощь" or text == "🏠 Главное меню":
         user_id = update.effective_user.id
         room_id = await db.get_user_room(user_id)
@@ -827,7 +865,7 @@ async def donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Отправляет пользователю инвойс для доната через Telegram Stars (XTR)
     """
-    prices = [LabeledPrice(label="Поддержка автора", amount=100)]
+    prices = [LabeledPrice(label="Поддержка автора", amount=1)]
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
         title="Поддержка автора",
@@ -856,6 +894,376 @@ async def successful_payment_callback(
     После успешной оплаты можно поблагодарить пользователя
     """
     payment = update.message.successful_payment
+    user_id = update.effective_user.id
+    stars = max(1, payment.total_amount // 100)
+    new_balance = await db.add_balance(user_id, stars)
+    balance_text = f"{new_balance}⭐" if new_balance is not None else "?"
     await update.message.reply_text(
-        f"Спасибо за поддержку! Вы пожертвовали {payment.total_amount / 100} звёзд."
+        f"Спасибо за поддержку! Вы пожертвовали {stars}⭐.\n"
+        f"💳 Баланс: {balance_text}"
+    )
+
+
+def _format_price_list():
+    ordered = ["easy", "medium", "hard"]
+    return "\n".join(
+        f"• {HINT_LABELS[item]}: {HINT_PRICES[item]} ⭐" for item in ordered
+    )
+
+
+def _build_hint_selection_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                f"{HINT_LABELS[hint_type]} — {HINT_PRICES[hint_type]} ⭐",
+                callback_data=f"buy_type:{hint_type}",
+            )
+        ]
+        for hint_type in ["easy", "medium", "hard"]
+    ]
+    keyboard.append(
+        [InlineKeyboardButton("❌ Закрыть", callback_data="buy_cancel")]
+    )
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _build_quantity_keyboard(hint_type: str):
+    buttons = []
+    for qty in HINT_QUANTITIES:
+        total = qty * HINT_PRICES[hint_type]
+        buttons.append(
+            InlineKeyboardButton(
+                f"{qty} шт. — {total} ⭐",
+                callback_data=f"buy_confirm:{hint_type}:{qty}",
+            )
+        )
+    buttons.append(
+        InlineKeyboardButton("⬅️ Назад", callback_data="buy_type:back")
+    )
+    rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
+    return InlineKeyboardMarkup(rows)
+
+
+async def _process_hint_purchase(user_id: int, hint_type: str, quantity: int):
+    price_per_hint = HINT_PRICES[hint_type]
+    total_cost = price_per_hint * quantity
+    result = await db.purchase_hints(
+        user_id,
+        total_cost,
+        hard=quantity if hint_type == "hard" else 0,
+        medium=quantity if hint_type == "medium" else 0,
+        easy=quantity if hint_type == "easy" else 0,
+    )
+
+    if not result:
+        account = await db.get_user_account(user_id) or {"balance": 0}
+        message = (
+            f"❌ Недостаточно звезд на балансе ({account.get('balance', 0)}⭐) — "
+            f"нужно {total_cost}⭐. Пополните через /donate и попробуйте снова."
+        )
+        return False, message
+
+    message = (
+        f"✅ Вы купили {quantity} {HINT_LABELS[hint_type]} подсказок за {total_cost}⭐.\n"
+        f"⭐ Баланс: {result['balance']}⭐\n"
+        "📦 Сейчас на счету:\n"
+        f"• {HINT_LABELS['hard']}: {result['hard_hints']} шт.\n"
+        f"• {HINT_LABELS['medium']}: {result['medium_hints']} шт.\n"
+        f"• {HINT_LABELS['easy']}: {result['easy_hints']} шт."
+    )
+    return True, message
+
+
+def _personal_account_text(user, balance, hard, medium, easy):
+    name = user.full_name or user.username or "Игрок"
+    return (
+        "<b>👤 Личный кабинет</b>\n\n"
+        f"🔸 Имя: <b>{name}</b>\n\n"
+        "📊 Статистика шпиона:\n"
+        "• Миссий завершено: 42\n"
+        "• Лучший результат: 7/8\n"
+        "• Средний рейтинг: A➤B\n\n"
+        f"⭐ Баланс: <b>{balance}</b> ⭐\n\n"
+        "📦 На счету подсказок:\n"
+        f"• {HINT_LABELS['hard']}: {hard} шт.\n"
+        f"• {HINT_LABELS['medium']}: {medium} шт.\n"
+        f"• {HINT_LABELS['easy']}: {easy} шт.\n\n"
+        "💳 Чтобы пополнить баланс, используйте /donate\n"
+        "🛒 Чтобы купить подсказки, воспользуйтесь меню ниже."
+    )
+
+
+def _build_cabinet_keyboard():
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🏠 Главное меню", callback_data="cabinet:menu"),
+                InlineKeyboardButton(
+                    "🛒 Купить подсказки", callback_data="cabinet:buy_hints"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "💳 Пополнить баланс", callback_data="cabinet:donate"
+                )
+            ],
+        ]
+    )
+
+
+def _build_donate_keyboard():
+    buttons = [
+        InlineKeyboardButton(
+            f"{amount} ⭐", callback_data=f"donate_amount:{amount}"
+        )
+        for amount in DONATE_AMOUNTS
+    ]
+    buttons.append(
+        InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")
+    )
+    rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
+    return InlineKeyboardMarkup(rows)
+
+
+async def _send_donate_invoice(
+    chat_id: int, context: ContextTypes.DEFAULT_TYPE, amount: int
+):
+    prices = [LabeledPrice(label=f"{amount} ⭐", amount=amount * 100)]
+    await context.bot.send_invoice(
+        chat_id=chat_id,
+        title="Пополнение баланса",
+        description=f"Вы пополняете баланс на {amount} ⭐",
+        payload=f"donate_{amount}",
+        currency="XTR",
+        prices=prices,
+        start_parameter="donate",
+        provider_token="",
+    )
+
+
+async def _get_account_summary(user_id: int):
+    await db.ensure_user_account(user_id)
+    account = await db.get_user_account(user_id) or {}
+    return (
+        account.get("balance", 0) or 0,
+        account.get("hard_hints", 0) or 0,
+        account.get("medium_hints", 0) or 0,
+        account.get("easy_hints", 0) or 0,
+    )
+
+
+
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+async def personal_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    balance, hard_count, medium_count, easy_count = await _get_account_summary(
+        user_id
+    )
+
+    await update.message.reply_text(
+        _personal_account_text(
+            update.effective_user,
+            balance,
+            hard_count,
+            medium_count,
+            easy_count,
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_build_cabinet_keyboard(),
+    )
+
+
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    args = context.args or []
+    if len(args) >= 2:
+        hint_type = args[0].lower()
+        if hint_type not in HINT_PRICES:
+            await update.message.reply_text(
+                f"Неизвестный тип подсказки: {hint_type}. "
+                f"Доступны: {', '.join(HINT_PRICES.keys())}"
+            )
+            return
+
+        try:
+            quantity = int(args[1])
+        except ValueError:
+            await update.message.reply_text("Количество должно быть числом.")
+            return
+
+        if quantity <= 0:
+            await update.message.reply_text("Количество должно быть больше нуля.")
+            return
+
+        _, message = await _process_hint_purchase(user_id, hint_type, quantity)
+        await update.message.reply_text(message)
+        return
+
+    price_text = (
+        "🛒 Купить подсказки:\n"
+        f"{_format_price_list()}\n\n"
+        "Выберите тип подсказки, чтобы продолжить."
+    )
+    await update.message.reply_text(
+        price_text, reply_markup=_build_hint_selection_keyboard()
+    )
+
+
+async def buy_hint_type_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    parts = query.data.split(":", 1)
+    if len(parts) != 2:
+        return
+    hint_type = parts[1]
+    if hint_type == "back":
+        price_text = (
+            "🛒 Купить подсказки:\n"
+            f"{_format_price_list()}\n\n"
+            "Выберите тип подсказки, чтобы продолжить."
+        )
+        await query.message.edit_text(
+            price_text, reply_markup=_build_hint_selection_keyboard()
+        )
+        return
+
+    if hint_type not in HINT_PRICES:
+        await query.message.edit_text(
+            "Неизвестный тип подсказки.", reply_markup=_build_hint_selection_keyboard()
+        )
+        return
+
+    text = (
+        f"💠 Вы выбрали {HINT_LABELS[hint_type]}.\n"
+        f"Цена за штуку: {HINT_PRICES[hint_type]}⭐\n\n"
+        "Выберите количество:"
+    )
+    await query.message.edit_text(
+        text, reply_markup=_build_quantity_keyboard(hint_type)
+    )
+
+
+async def buy_hint_confirm_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    parts = query.data.split(":")
+    if len(parts) != 3:
+        return
+    _, hint_type, qty_str = parts
+    if hint_type not in HINT_PRICES:
+        await query.message.edit_text(
+            "Неизвестный тип подсказки.", reply_markup=_build_hint_selection_keyboard()
+        )
+        return
+
+    try:
+        quantity = int(qty_str)
+    except ValueError:
+        await query.message.edit_text(
+            "Неправильное количество.", reply_markup=_build_hint_selection_keyboard()
+        )
+        return
+
+    success, message = await _process_hint_purchase(
+        query.from_user.id, hint_type, quantity
+    )
+    suffix = (
+        "\n\n🛒 Хотите ещё? Выберите тип ниже."
+        if success
+        else "\n\nПопробуйте другой тип или пополните баланс через /donate."
+    )
+    await query.message.edit_text(
+        message + suffix, reply_markup=_build_hint_selection_keyboard()
+    )
+
+
+async def buy_hint_cancel_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    await query.message.edit_text("❌ Покупка отменена.")
+
+
+async def cabinet_action_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    action = query.data.split(":", 1)[-1]
+
+    if action == "menu":
+        await query.message.delete()
+        await show_main_menu(query.from_user.id, context)
+        return
+
+    if action == "buy_hints":
+        price_text = (
+            "🛒 Купить подсказки:\n"
+            f"{_format_price_list()}\n\n"
+            "Выберите тип подсказки, чтобы продолжить."
+        )
+        await query.message.edit_text(
+            price_text, reply_markup=_build_hint_selection_keyboard()
+        )
+        return
+
+    if action == "donate":
+        await query.message.edit_text(
+            "💳 Выберите, сколько звезд хотите пополнить:", reply_markup=_build_donate_keyboard()
+        )
+        return
+
+    if action == "account":
+        balance, hard, medium, easy = await _get_account_summary(query.from_user.id)
+        await query.message.edit_text(
+            _personal_account_text(
+                query.from_user, balance, hard, medium, easy
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_cabinet_keyboard(),
+        )
+
+
+async def donate_amount_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    parts = query.data.split(":")
+    if len(parts) != 2:
+        return
+    _, amount_str = parts
+    try:
+        amount = int(amount_str)
+    except ValueError:
+        await query.message.edit_text(
+            "Неправильная сумма. Выберите снова.",
+            reply_markup=_build_donate_keyboard(),
+        )
+        return
+
+    await _send_donate_invoice(query.message.chat_id, context, amount)
+    await query.message.edit_text(
+        f"🧾 Формирую счёт на {amount} ⭐. Проверьте чат.",
+        reply_markup=_build_cabinet_keyboard(),
     )

@@ -56,6 +56,14 @@ class CreateDB:
                     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
                 )
             """)
-
-
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_accounts (
+                    user_id BIGINT PRIMARY KEY,
+                    balance INTEGER DEFAULT 0,
+                    hard_hints INTEGER DEFAULT 0,
+                    medium_hints INTEGER DEFAULT 0,
+                    easy_hints INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 db_init = CreateDB()

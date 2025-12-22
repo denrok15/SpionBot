@@ -35,6 +35,14 @@ from handlers.commands import (
     start,
     start_game,
     successful_payment_callback,
+    precheckout_callback,
+    personal_account,
+    buy_hint,
+    buy_hint_type_callback,
+    buy_hint_confirm_callback,
+    buy_hint_cancel_callback,
+    cabinet_action_callback,
+    donate_amount_callback,
 )
 from utils.background import generate_clue, periodic_cleanup
 
@@ -85,9 +93,26 @@ async def main():
         CommandHandler("mode_dota", set_mode_dota),
         CommandHandler("menu", start),
         CommandHandler("stats", show_stats),
+        CommandHandler("account", personal_account),
+        CommandHandler("buy_hint", buy_hint),
     ]
     application.add_handler(
         CallbackQueryHandler(check_subscription_callback, pattern="check_subscription")
+    )
+    application.add_handler(
+        CallbackQueryHandler(buy_hint_type_callback, pattern=r"^buy_type:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(buy_hint_confirm_callback, pattern=r"^buy_confirm:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(buy_hint_cancel_callback, pattern="buy_cancel")
+    )
+    application.add_handler(
+        CallbackQueryHandler(cabinet_action_callback, pattern=r"^cabinet:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(donate_amount_callback, pattern=r"^donate_amount:")
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))

@@ -5,7 +5,7 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             ["🎮 Создать комнату", "🔗 Присоединиться"],
-            ["📖 Правила"],
+            ["👤 Личный кабинет", "📖 Правила"],
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
