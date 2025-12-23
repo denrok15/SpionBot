@@ -42,7 +42,7 @@ HINT_PRICES = {
 HINT_LABELS = {
     "hard": "Хард",
     "medium": "Медиум",
-    "easy": "Лёгкая (мелкая)",
+    "easy": "Легкая",
 }
 
 HINT_QUANTITIES = [1, 2, 3]
@@ -922,7 +922,7 @@ def _build_hint_selection_keyboard():
         for hint_type in ["easy", "medium", "hard"]
     ]
     keyboard.append(
-        [InlineKeyboardButton("❌ Закрыть", callback_data="buy_cancel")]
+        [InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")]
     )
     return InlineKeyboardMarkup(keyboard)
 
@@ -988,7 +988,7 @@ def _personal_account_text(user, balance, hard, medium, easy):
         f"• {HINT_LABELS['hard']}: {hard} шт.\n"
         f"• {HINT_LABELS['medium']}: {medium} шт.\n"
         f"• {HINT_LABELS['easy']}: {easy} шт.\n\n"
-        "💳 Чтобы пополнить баланс, используйте /donate\n"
+        "💳 Чтобы пополнить баланс, используйте /donate или меню ниже\n"
         "🛒 Чтобы купить подсказки, воспользуйтесь меню ниже."
     )
 
@@ -1028,7 +1028,7 @@ def _build_donate_keyboard():
 async def _send_donate_invoice(
     chat_id: int, context: ContextTypes.DEFAULT_TYPE, amount: int
 ):
-    prices = [LabeledPrice(label=f"{amount} ⭐", amount=amount * 100)]
+    prices = [LabeledPrice(label=f"{amount} ⭐", amount=amount * 1)]
     await context.bot.send_invoice(
         chat_id=chat_id,
         title="Пополнение баланса",
