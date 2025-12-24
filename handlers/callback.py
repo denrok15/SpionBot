@@ -12,7 +12,7 @@ from const import (
     MODE_CLASH,
 )
 from database.actions import db
-from handlers.button import get_room_keyboard
+from handlers.button import get_game_inline_button, get_room_keyboard
 from handlers.commands import HINT_PRICES
 from utils.clue import clue_obj
 from utils.decorators import hint_guard
@@ -78,30 +78,42 @@ async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=inline_keyboard,
     )
 @hint_guard
-async def check_clue(update: Update, context: ContextTypes.DEFAULT_TYPE,clue_type):
-
+async def check_clue(update: Update, context: ContextTypes.DEFAULT_TYPE,clue_type : str):
     query = update.callback_query
     await query.answer()
+    chat_id = update.effective_chat.id
+
+
+
+    hint_type = f"{clue_type}_hints"
     user_id = query.from_user.id
     room_id = await db.get_user_room(user_id)
     if not room_id:
-        await context.bot.send_message("Вы находитесь не в игры!")
+        await context.bot.send_message(chat_id=chat_id,text = "Вы находитесь не в игры!")
         return
+
     room = await db.get_room(room_id)
     word = room.get("word")
     if not room or not room.get("word"):
-        await query.message.reply_text("Слово еще не выбрано")
+        await context.bot.send_message(chat_id=chat_id,text = "Вы находитесь не в игры!")
         return
+
     logger.info("Получен герой из комнаты")
     mode = room.get("mode")
-    hint_type = clue_type + "_hints"
-    game_key = "dota2" if mode == "Dota2" else "clash_royale"
-    count_hints = await db.get_user_hint(user_id,hint_type)
-    if not count_hints :
-        await query.message.reply_text("У вас нет подсказок,для данного типа.Приобрести подсказку можно в личном кабинете")
-        logger.info("У пользователя нет подсказок")
+    game_key = mode.lower()
+    count = await db.get_user_account(user_id)
+    if count is None:
+        logger.info("Произошла ошибка взятия подсказок")
+        return
+    count_hints = {"easy": count["easy_hints"], "medium": count["medium_hints"], "hard": count["hard_hints"]}
+    if count_hints[clue_type] <= 0:
+        await context.bot.send_message(chat_id=chat_id,text =
+            "У вас нет подсказок,для данного типа.Приобрести подсказку можно в личном кабинете")
+        logger.info(f"У пользователя нет подсказок типа {clue_type}")
         return
     clue = clue_obj.found_clue(game_key, word, clue_type)
     await db.update_user_hint(user_id, hint_type)
+    count_hints[clue_type] -= 1
     logger.info("Удалены подсказка у пользователя.")
-    await query.message.reply_text(clue)
+    await query.edit_message_reply_markup(get_game_inline_button(count_hints["easy"],count_hints["medium"],count_hints["hard"]))
+    await context.bot.send_message(chat_id=chat_id, text=clue)
