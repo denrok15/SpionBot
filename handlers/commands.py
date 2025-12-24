@@ -15,7 +15,7 @@ from const import (
     MODE_DOTA,
 )
 from database.actions import db
-from handlers.button import get_main_keyboard, get_room_keyboard,get_game_inline_button
+from handlers.button import get_game_inline_button, get_main_keyboard, get_room_keyboard
 from utils.decorators import (
     create_decorators,
     logger,
@@ -44,6 +44,7 @@ HINT_QUANTITIES = [1, 2, 3]
 
 DONATE_AMOUNTS = [5, 10, 20]
 
+
 async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
 
 
@@ -71,8 +72,6 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
-
-
 async def check_subscription_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -272,7 +271,14 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     card_url = cards_map.get(word, "")
     spy = random.choice(players)
 
-    keyboard_inline = get_game_inline_button()
+    account = await db.get_user_account(user_id)
+    if not account:
+        easy = medium = hard = 0
+    else:
+        easy = account["easy_hints"]
+        medium = account["medium_hints"]
+        hard = account["hard_hints"]
+    keyboard_inline = get_game_inline_button(easy,medium,hard)
 
     await db.update_room_game_state(room_id, word, spy, card_url)
     for player_id in players:
@@ -283,6 +289,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
             )
             try:
+
                 if cached_file_id:
                     await context.bot.send_photo(
                         chat_id=player_id,
