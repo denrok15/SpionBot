@@ -1,3 +1,5 @@
+import logging
+
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -11,7 +13,11 @@ from const import (
 )
 from database.actions import db
 from handlers.button import get_room_keyboard
+from utils.clue import clue_obj
+from utils.decorators import hint_guard
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MODE = MODE_CLASH
 async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -27,10 +33,7 @@ async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         "3)Easy - факт,который будет понятен даже новичкам!(Цена: 20✨)\n"
         "Ниже ты можешь заранее выбрать подсказка,какая будет в игре. Если-же у вас нет подсказок,то их можно приобрести в личном кабинете в главном меню.",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_room"),
-             InlineKeyboardButton("🔴 Хард", callback_data="ЕЕЕЕЕЕЕЕЕЕЕ"),
-             InlineKeyboardButton("🟡 Медиум", callback_data="ЕЕЕЕЕЕЕЕЕЕЕ"),
-             InlineKeyboardButton("🟢 Лёгкая", callback_data="ЕЕЕЕЕЕЕЕЕЕЕ")]
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_room")]
         ])
     )
 async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -69,3 +72,31 @@ async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TY
         parse_mode=ParseMode.HTML,
         reply_markup=inline_keyboard,
     )
+@hint_guard
+async def check_clue(update: Update, context: ContextTypes.DEFAULT_TYPE,clue_type):
+
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    room_id = await db.get_user_room(user_id)
+    if not room_id:
+        await context.bot.send_message("Вы находитесь не в игры!")
+        return
+    room = await db.get_room(room_id)
+    word = room.get("word")
+    if not room or not room.get("word"):
+        await query.message.reply_text("Слово еще не выбрано")
+        return
+    logger.info("Получен герой из комнаты")
+    mode = room.get("mode")
+    hint_type = clue_type + "_hints"
+    game_key = "dota2" if mode == "Dota2" else "clash_royale"
+    count_hints = await db.get_user_hint(user_id,hint_type)
+    if not count_hints :
+        await query.message.reply_text("У вас нет подсказок,для данного типа.Приобрести подсказку можно по команду /donate")
+        logger.info("У пользователя нет подсказок")
+        return
+    clue = clue_obj.found_clue(game_key, word, clue_type)
+    await db.update_user_hint(user_id, hint_type)
+    logger.info("Удалены подсказка у пользователя.")
+    await query.message.reply_text(clue)
