@@ -267,7 +267,7 @@ class ButtonCommand(CreateDB):
                 f"SELECT {hint_type} FROM user_accounts WHERE user_id = $1",
                 user_id,
             )
-            return row["easy_hints"] if row else None
+            return row[hint_type] if row else None
 
     async def update_user_hint(self, user_id: int,
                             hint_type: Literal["easy_hints", "medium_hints", "hard_hints"])->None:

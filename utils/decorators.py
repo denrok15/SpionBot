@@ -374,7 +374,7 @@ def hint_guard(func):
         await query.answer()
         _, clue_type = query.data.split(":")
         if clue_type not in ("easy", "medium", "hard"):
-            await query.message.reply_text("Неизвестный тип подсказки")
+            logger.info("Неизвестный тип подсказки")
             return
         return await func(update, context, clue_type)
     return wrapper

@@ -1,4 +1,4 @@
-from telegram import ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def get_main_keyboard() -> ReplyKeyboardMarkup:
@@ -21,3 +21,10 @@ def get_room_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=False,
     )
+def get_game_inline_button()-> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔴 Хард", callback_data="check_clue:hard"),
+            InlineKeyboardButton("🟡 Медиум", callback_data="check_clue:medium"),
+            InlineKeyboardButton("🟢 Лёгкая", callback_data="check_clue:easy")]
+    ])

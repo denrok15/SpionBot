@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:15.4
+    container_name: kkk
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: strongpass
+      POSTGRES_DB: full_db

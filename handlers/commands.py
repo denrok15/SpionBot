@@ -15,7 +15,7 @@ from const import (
     MODE_DOTA,
 )
 from database.actions import db
-from handlers.button import get_main_keyboard, get_room_keyboard
+from handlers.button import get_main_keyboard, get_room_keyboard,get_game_inline_button
 from utils.decorators import (
     create_decorators,
     logger,
@@ -105,7 +105,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await show_main_menu(user_id, context)
 
 
- 
+
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -126,6 +126,8 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         return
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
+
+
 
     keyboard = get_room_keyboard()
     await update.message.reply_text(
@@ -270,6 +272,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     card_url = cards_map.get(word, "")
     spy = random.choice(players)
 
+    keyboard_inline = get_game_inline_button()
+
     await db.update_room_game_state(room_id, word, spy, card_url)
     for player_id in players:
         if player_id == spy:
@@ -283,25 +287,15 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                     await context.bot.send_photo(
                         chat_id=player_id,
                         photo=cached_file_id,
-                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
-                        reply_markup=InlineKeyboardMarkup([
-                            [
-                             InlineKeyboardButton("🔴 Хард", callback_data="check_clue:hard"),
-                             InlineKeyboardButton("🟡 Медиум", callback_data="check_clue:medium"),
-                             InlineKeyboardButton("🟢 Лёгкая", callback_data="check_clue:easy")]
-                        ])
+                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Чтобы воспользоваться подсказками используй меню ниже",
+                        reply_markup=keyboard_inline
                     )
                 else:
                     result = await context.bot.send_photo(
                         chat_id=player_id,
                         photo="https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png",
-                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
-                        reply_markup=InlineKeyboardMarkup([
-                            [
-                                InlineKeyboardButton("🔴 Хард", callback_data="check_clue:hard"),
-                                InlineKeyboardButton("🟡 Медиум", callback_data="check_clue:medium"),
-                                InlineKeyboardButton("🟢 Лёгкая", callback_data="check_clue:easy")]
-                        ])
+                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Чтобы воспользоваться подсказками используй меню ниже",
+                        reply_markup=keyboard_inline
                     )
 
                     if hasattr(result, "photo") and result.photo:
@@ -316,12 +310,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 await context.bot.send_message(
                     player_id,
                     f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}",
-                    reply_markup=InlineKeyboardMarkup([
-                        [
-                            InlineKeyboardButton("🔴 Хард", callback_data="check_clue:hard"),
-                            InlineKeyboardButton("🟡 Медиум", callback_data="check_clue:medium"),
-                            InlineKeyboardButton("🟢 Лёгкая", callback_data="check_clue:easy")]
-                    ])
+                    reply_markup=keyboard_inline
                 )
 
         else:
@@ -634,7 +623,7 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "2️⃣ Вопросы должны помогать определить, кто шпион\n"
         "3️⃣ Отвечать нужно честно, *не называя слово напрямую*\n\n"
         "🎯 *Цели*\n\n"
-        "• 🕶️ *"
+         "• 🕶️ *Шпион*: понять, какое слово загадано\n"
         "*: понять, какое слово загадано\n"
         "• 🧑‍🤝‍🧑 *Остальные игроки*: вычислить шпиона\n\n"
         f"🎴 *Тематика*: {theme_name}\n"
@@ -1096,7 +1085,7 @@ async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if args[1].isdigit():
             quantity = int(args[1])
         else:
-            await update.message.reply_text("Количество должно быть целым неотрицательным числом.")
+            await update.message.reply_text("Количество должно быть целым числом больше 0.")
             return
 
         if quantity <= 0:
