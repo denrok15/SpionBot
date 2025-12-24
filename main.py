@@ -44,7 +44,7 @@ from handlers.commands import (
     start_game,
     successful_payment_callback,
 )
-from utils.background import periodic_cleanup,generate_clue
+from utils.background import generate_clue, periodic_cleanup
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO

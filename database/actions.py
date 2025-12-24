@@ -1,5 +1,6 @@
 import logging
 from typing import List, Literal, Optional
+
 import asyncpg
 
 from database.init import CreateDB, db_init
@@ -271,7 +272,7 @@ class ButtonCommand(CreateDB):
     async def update_user_hint(self, user_id: int,
                             hint_type: Literal["easy_hints", "medium_hints", "hard_hints"])->None:
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
+            await conn.fetchrow(
                 f"""
                 UPDATE user_accounts
                 SET {hint_type} = {hint_type} - 1 
