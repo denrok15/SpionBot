@@ -15,7 +15,7 @@ from telegram.ext import (
 )
 
 from database.actions import db
-from handlers.callback import show_clues_callback
+from handlers.callback import check_clue
 from handlers.commands import (
     buy_hint,
     buy_hint_cancel_callback,
@@ -44,7 +44,7 @@ from handlers.commands import (
     start_game,
     successful_payment_callback,
 )
-from utils.background import generate_clue, periodic_cleanup
+from utils.background import periodic_cleanup,generate_clue
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -72,12 +72,9 @@ async def main():
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         return
-
     asyncio.create_task(periodic_cleanup())
     asyncio.create_task(generate_clue())
-
     application = Application.builder().token(API_TOKEN).build()
-
     handlers = [
         CommandHandler("start", start),
         CommandHandler("create", create_room),
@@ -115,10 +112,7 @@ async def main():
         CallbackQueryHandler(donate_amount_callback, pattern=r"^donate_amount:")
     )
     application.add_handler(
-        CallbackQueryHandler(show_clues_callback, pattern="check_clue")
-    )
-    application.add_handler(
-        CallbackQueryHandler(create_room, pattern="back_to_room")
+        CallbackQueryHandler(check_clue, pattern=r"^check_clue:")
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
