@@ -33,9 +33,10 @@ from handlers.commands import (
     show_players,
     show_stats,
     start,
+    single_mode,
+    single_mode_callback,
     start_game,
     successful_payment_callback,
-    precheckout_callback,
     personal_account,
     buy_hint,
     buy_hint_type_callback,
@@ -92,12 +93,16 @@ async def main():
         CommandHandler("mode_clash", set_mode_clash),
         CommandHandler("mode_dota", set_mode_dota),
         CommandHandler("menu", start),
+        CommandHandler("single", single_mode),
         CommandHandler("stats", show_stats),
         CommandHandler("account", personal_account),
         CommandHandler("buy_hint", buy_hint),
     ]
     application.add_handler(
         CallbackQueryHandler(check_subscription_callback, pattern="check_subscription")
+    )
+    application.add_handler(
+        CallbackQueryHandler(single_mode_callback, pattern=r"^single:")
     )
     application.add_handler(
         CallbackQueryHandler(buy_hint_type_callback, pattern=r"^buy_type:")

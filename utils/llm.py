@@ -12,7 +12,7 @@ API_KEY_LLM = os.getenv("API_KEY_LLM")
 URL_LLM = os.getenv("URL_LLM")
 
 
-def ask_llm(promt: str) -> dict:
+async def ask_llm(promt: str) -> dict:
     headers = {
         "Authorization": f"Bearer {API_KEY_LLM}",
         "Content-Type": "application/json",

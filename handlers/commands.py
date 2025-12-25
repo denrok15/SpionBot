@@ -1,24 +1,22 @@
 import random
+from dataclasses import dataclass
+from io import BytesIO
+from pathlib import Path
+from typing import Dict, Optional
 
-from telegram import LabeledPrice, Update
-from telegram.constants import ParseMode
-from telegram.error import BadRequest
-from telegram.ext import ContextTypes
-
-from const import (
-    MODE_CLASH,
-    MODE_DOTA,
-)
 from telegram import (
-    Update,
-    LabeledPrice,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputFile,
+    InputMediaPhoto,
+    LabeledPrice,
+    Update,
 )
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from utils.decorators import create_decorators
+
+from const import MODE_CLASH, MODE_DOTA
 from database.actions import db
 from handlers.button import get_main_keyboard, get_room_keyboard
 from utils.decorators import (
@@ -49,6 +47,34 @@ HINT_QUANTITIES = [1, 2, 3]
 
 DONATE_AMOUNTS = [5, 10, 20]
 
+SINGLE_MODE_PLACEHOLDER_URL = (
+    "https://via.placeholder.com/512x512.png?text=Spy+Mode"
+)
+BACK_CARD_PATH = Path("static/backCard.png")
+BACK_CARD_BYTES = BACK_CARD_PATH.read_bytes() if BACK_CARD_PATH.exists() else None
+SINGLE_MODE_PLAYER_OPTIONS = [2, 3, 4, 5, 6, 7, 8]
+SINGLE_MODE_SPY_IMAGE_URL = (
+    "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
+)
+
+
+@dataclass
+class SingleModeSession:
+    chat_id: int
+    message_id: int
+    word: str
+    card_url: str
+    player_count: int
+    spy_index: int
+    current_index: int
+    mode: str
+    revealed: bool = False
+    back_card_file_id: Optional[str] = None
+
+
+SINGLE_MODE_SESSIONS: Dict[int, SingleModeSession] = {}
+
+
 async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
 
@@ -74,6 +100,153 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
+
+
+def _build_single_mode_selection_keyboard() -> InlineKeyboardMarkup:
+    rows = []
+    for i in range(0, len(SINGLE_MODE_PLAYER_OPTIONS), 3):
+        buttons = [
+            InlineKeyboardButton(
+                f"{count} игроков", callback_data=f"single:select:{count}"
+            )
+            for count in SINGLE_MODE_PLAYER_OPTIONS[i : i + 3]
+        ]
+        rows.append(buttons)
+    rows.append(
+        [InlineKeyboardButton("❌ Отмена", callback_data="single:cancel")]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
+
+def _build_single_mode_keyboard(session: SingleModeSession) -> InlineKeyboardMarkup:
+    is_spy = session.current_index == session.spy_index
+    if session.revealed and is_spy:
+        center_label = "Вы — шпион"
+    else:
+        center_label = session.word if session.revealed else "Карта скрыта"
+    reveal_label = "🔓 Скрыть карту" if session.revealed else "🃏 Открыть карту"
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⬅️", callback_data="single:prev"),
+                InlineKeyboardButton(center_label, callback_data="single:noop"),
+                InlineKeyboardButton("➡️", callback_data="single:next"),
+            ],
+            [
+                InlineKeyboardButton(reveal_label, callback_data="single:reveal"),
+                InlineKeyboardButton("🏠 Главное меню", callback_data="single:exit"),
+            ],
+            [
+                InlineKeyboardButton("🔁 Перезапустить", callback_data="single:restart")
+            ],
+        ]
+    )
+
+
+def _build_single_mode_caption(session: SingleModeSession) -> str:
+    is_spy = session.current_index == session.spy_index
+    if not session.revealed:
+        theme_name = get_theme_name(session.mode)
+        return (
+            f"🎴 Карта скрыта\n"
+            f"🎯 Тематика: {theme_name}\n"
+            "📱 Передайте телефон следующему игроку, затем нажмите «Открыть карту».\n"
+            f"Игрок {session.current_index + 1}/{session.player_count}"
+        )
+    if is_spy:
+        return (
+            f"🎭 Вы — шпион!\n"
+            "❌ Вы не знаете слово, но наблюдайте за реакциями остальных.\n"
+            f"Игрок {session.current_index + 1}/{session.player_count}"
+        )
+    theme_name = get_theme_name(session.mode)
+    return (
+        f"✅ Вы мирный игрок!\n"
+        f"🎴 Слово: <b>{session.word}</b>\n"
+        f"🎯 Тематика: {theme_name}\n"
+        f"⚠️ Все остальные тоже видят это слово."
+        f"\nИгрок {session.current_index + 1}/{session.player_count}"
+    )
+
+
+def _create_single_mode_session(player_count: int, mode: str) -> SingleModeSession:
+    words, cards_map = get_words_and_cards_by_mode(mode)
+    if not words:
+        return None
+    word = random.choice(words)
+    card_url = cards_map.get(word, "")
+    spy_index = random.randrange(player_count)
+    return SingleModeSession(
+        chat_id=0,
+        message_id=0,
+        word=word,
+        card_url=card_url,
+        player_count=player_count,
+        spy_index=spy_index,
+        current_index=0,
+        mode=mode,
+    )
+
+
+def _get_single_mode_photo(session: SingleModeSession):
+    is_spy = session.current_index == session.spy_index
+    if session.revealed:
+        if is_spy:
+            return SINGLE_MODE_SPY_IMAGE_URL
+        return session.card_url or SINGLE_MODE_PLACEHOLDER_URL
+    if session.back_card_file_id:
+        return session.back_card_file_id
+    if BACK_CARD_BYTES:
+        return InputFile(BytesIO(BACK_CARD_BYTES), filename=BACK_CARD_PATH.name)
+    return SINGLE_MODE_PLACEHOLDER_URL
+
+
+async def _send_single_mode_card(
+    user_id: int, context: ContextTypes.DEFAULT_TYPE, session: SingleModeSession
+):
+    photo_source = _get_single_mode_photo(session)
+    try:
+        message = await context.bot.send_photo(
+            chat_id=user_id,
+            photo=photo_source,
+            caption=_build_single_mode_caption(session),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_single_mode_keyboard(session),
+        )
+    except BadRequest as exc:
+        logger.error("Single mode send failed: %s", exc)
+        return await context.bot.send_message(
+            chat_id=user_id,
+            text=_build_single_mode_caption(session),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_single_mode_keyboard(session),
+        )
+    if not session.back_card_file_id and hasattr(message, "photo") and message.photo:
+        session.back_card_file_id = message.photo[-1].file_id
+    return message
+
+
+async def _update_single_mode_message(
+    query, session: SingleModeSession
+):
+    if not query.message:
+        return
+    photo_source = _get_single_mode_photo(session)
+    caption = _build_single_mode_caption(session)
+    keyboard = _build_single_mode_keyboard(session)
+    media = InputMediaPhoto(media=photo_source, caption=caption, parse_mode=ParseMode.HTML)
+    try:
+        await query.edit_message_media(media=media, reply_markup=keyboard)
+    except BadRequest:
+        try:
+            await query.message.edit_caption(
+                caption=caption,
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard,
+            )
+        except BadRequest as exc:
+            logger.warning("Не удалось обновить Single Mode: %s", exc)
 
 
 async def check_subscription_callback(
@@ -104,6 +277,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     await show_main_menu(user_id, context)
+
+
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+async def single_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    SINGLE_MODE_SESSIONS.pop(user_id, None)
+    keyboard = _build_single_mode_selection_keyboard()
+    await update.message.reply_text(
+        "🃏 Выберите, сколько игроков будет по очереди смотреть карту. "
+        "Нажимайте «Вперёд» и «Назад», а после просмотра передавайте телефон.",
+        reply_markup=keyboard,
+    )
 
 
 @subscription_required
@@ -811,6 +998,91 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def single_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    user_id = query.from_user.id
+    parts = query.data.split(":")
+    if len(parts) < 2:
+        return
+    action = parts[1]
+
+    if action == "select":
+        if len(parts) != 3:
+            return
+        try:
+            player_count = int(parts[2])
+        except ValueError:
+            return
+        if player_count not in SINGLE_MODE_PLAYER_OPTIONS:
+            await query.answer("Выберите доступное число игроков.", show_alert=True)
+            return
+        session = _create_single_mode_session(player_count, DEFAULT_MODE)
+        if not session:
+            await query.answer("К сожалению, нет доступных карт.", show_alert=True)
+            return
+        session.chat_id = user_id
+        message = await _send_single_mode_card(user_id, context, session)
+        session.message_id = message.message_id
+        SINGLE_MODE_SESSIONS[user_id] = session
+        try:
+            await query.message.delete()
+        except BadRequest:
+            pass
+        return
+
+    if action == "cancel":
+        try:
+            await query.message.edit_text("❌ Сессия отменена.")
+        except BadRequest:
+            pass
+        return
+
+    session = SINGLE_MODE_SESSIONS.get(user_id)
+    if not session:
+        await query.answer("Сессия завершена. Запустите режим снова.", show_alert=True)
+        return
+    await query.answer()
+
+    total = session.player_count
+    if total == 0:
+        await query.answer("Сессия инициализирована неправильно.", show_alert=True)
+        return
+
+    if action == "prev":
+        session.current_index = (session.current_index - 1) % total
+        session.revealed = False
+        await _update_single_mode_message(query, session)
+    elif action == "next":
+        session.current_index = (session.current_index + 1) % total
+        session.revealed = False
+        await _update_single_mode_message(query, session)
+    elif action == "reveal":
+        session.revealed = not session.revealed
+        await _update_single_mode_message(query, session)
+    elif action == "restart":
+        new_session = _create_single_mode_session(session.player_count, session.mode)
+        if new_session:
+            new_session.chat_id = session.chat_id
+            new_session.message_id = session.message_id
+            new_session.back_card_file_id = session.back_card_file_id
+            SINGLE_MODE_SESSIONS[user_id] = new_session
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="🔁 Single мод перезапущен! Сделайте новое раскрытие карты.",
+            )
+            await _update_single_mode_message(query, new_session)
+    elif action == "exit":
+        SINGLE_MODE_SESSIONS.pop(user_id, None)
+        try:
+            await query.message.delete()
+        except BadRequest:
+            pass
+        await show_main_menu(user_id, context)
+    # noop or unknown actions require no response
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     # user_id = update.effective_user.id не используется в функции
@@ -825,6 +1097,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await restart_game(update, context)
     elif text == "📖 Правила":
         await rules(update, context)
+    elif text == "🃏 Сингл мод":
+        await single_mode(update, context)
     elif text == "🎴 Все карты":
         await show_cards(update, context)
     elif text == "👤 Моя роль/слово":
