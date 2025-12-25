@@ -1,6 +1,5 @@
 import asyncio
 import logging
-
 from const import PROMPTS, game_array
 from database.actions import db
 from utils.clue import clue_obj
@@ -9,7 +8,6 @@ from utils.llm import ask_llm
 sem = asyncio.Semaphore(3)
 
 logger = logging.getLogger(__name__)
-
 
 async def periodic_cleanup() -> None:
     """Фоновая задача для очистки старых данных"""
@@ -31,7 +29,7 @@ async def generate_clue() -> None:
             for game in PROMPTS:
                 for Heroname in game_array[game]:
                     try:
-                        result = await ask_llm(
+                        result = ask_llm(
                             PROMPTS[game].replace("{Heroname}", Heroname)
                         )
                         getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]
