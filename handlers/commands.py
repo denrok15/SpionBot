@@ -15,7 +15,13 @@ from const import (
     MODE_DOTA,
 )
 from database.actions import db
-from handlers.button import get_game_inline_button, get_main_keyboard, get_room_keyboard
+from handlers.button import (
+    get_game_inline_button,
+    get_inline_keyboard,
+    get_main_keyboard,
+    get_message_start,
+    get_room_keyboard,
+)
 from utils.decorators import (
     create_decorators,
     logger,
@@ -126,19 +132,17 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
 
-
-
+    inline_keyboard = get_inline_keyboard()
     keyboard = get_room_keyboard()
+
     await update.message.reply_text(
-        f"ID комнаты: <code>{room_id}</code>\n"
-        f"Отправьте этот ID другим игрокам\n\n"
-        f"👥 Игроков: 1/15\n"
-        f"🎴 Режим: {get_theme_name(DEFAULT_MODE)}\n"
-        f"Доступно слов: {len(words)}\n"
-        f"Создатель комнаты может сменить режим командами /mode_clash и /mode_dota\n\n"
-        f"Для начала игры нажмите '▶️ Начать игру'",
+        "✅ Комната создана!\n\n",
         parse_mode=ParseMode.HTML,
-        reply_markup=keyboard,
+        reply_markup = keyboard,
+    )
+    await update.message.reply_text(text = get_message_start(room_id,1,get_theme_name(DEFAULT_MODE),len(words)),
+        parse_mode=ParseMode.HTML,
+        reply_markup=inline_keyboard,
     )
  
 @decorators.rate_limit()
@@ -204,12 +208,16 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     players = await db.get_room_players(room_id)
 
     keyboard = get_room_keyboard()
+    inline_keyboard = get_inline_keyboard()
+    await update.message.reply_text(
+        f"✅ Вы присоединились к комнате {room_id}!\n\n",reply_markup=keyboard)
+
 
     await update.message.reply_text(
-        f"✅ Вы присоединились к комнате {room_id}!\n\n"
         f"👥 Игроков: {len(players)}/15\n"
-        f"Ожидайте начала игры...",
-        reply_markup=keyboard,
+        f"Ожидайте начала игры...\n"
+        f"По кнопке ниже вы можете ознакомиться с подсказками для игры🙂",
+        reply_markup=inline_keyboard
     )
 
     creator_id = room["creator_id"]
@@ -403,12 +411,14 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_room_keyboard()
 
     await update.message.reply_text(
+        text =
         f"🔄 Игра перезапущена!\n\n"
         f"ID комнаты: <code>{room_id}</code>\n"
         f"👥 Игроков: {len(players)}\n"
         f"🎴 Режим: {get_theme_name(room['mode'])}\n"
         f"Доступно слов: {len(words)}\n\n"
-        f"Для начала новой игры нажмите '▶️ Начать игру'",
+        f"Для начала новой игры нажмите '▶️ Начать игру'"
+        f"По кнопке ниже вы можете ознакомиться с подсказками для игры🙂",
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )

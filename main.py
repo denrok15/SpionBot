@@ -15,7 +15,11 @@ from telegram.ext import (
 )
 
 from database.actions import db
-from handlers.callback import check_clue
+from handlers.callback import (
+    back_to_room_callback,
+    check_clue_callback,
+    show_clues_callback,
+)
 from handlers.commands import (
     buy_hint,
     buy_hint_cancel_callback,
@@ -112,7 +116,13 @@ async def main():
         CallbackQueryHandler(donate_amount_callback, pattern=r"^donate_amount:")
     )
     application.add_handler(
-        CallbackQueryHandler(check_clue, pattern=r"^check_clue:")
+        CallbackQueryHandler(check_clue_callback, pattern=r"^check_clue:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(show_clues_callback, pattern="show_clues")
+    )
+    application.add_handler(
+        CallbackQueryHandler(back_to_room_callback, pattern="back_to_room")
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))

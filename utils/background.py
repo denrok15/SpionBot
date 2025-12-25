@@ -8,7 +8,6 @@ from utils.llm import ask_llm
 
 logger = logging.getLogger(__name__)
 
-
 async def periodic_cleanup() -> None:
     """Фоновая задача для очистки старых данных"""
     while True:
@@ -28,7 +27,7 @@ async def generate_clue() -> None:
         for game in PROMPTS:
             for Heroname in game_array[game]:
                 try:
-                    result = await ask_llm(
+                    result = ask_llm(
                         PROMPTS[game].replace("{Heroname}", Heroname)
                     )
                     getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]

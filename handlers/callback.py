@@ -12,8 +12,12 @@ from const import (
     MODE_CLASH,
 )
 from database.actions import db
-from handlers.button import get_game_inline_button, get_room_keyboard
-from handlers.commands import HINT_PRICES
+from handlers.button import (
+    get_game_inline_button,
+    get_inline_keyboard,
+    get_message_start,
+)
+from handlers.commands import DONATE_AMOUNTS
 from utils.clue import clue_obj
 from utils.decorators import hint_guard
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
@@ -22,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODE = MODE_CLASH
 async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Сработал show_clues_callback")
     query = update.callback_query
     await query.answer()
 
@@ -30,59 +35,39 @@ async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"Подсказки помогут тебе быстрее понять, какой персонаж загадан!\n\n"
         f"Существует 3 вида подсказок:\n"
         f"1) Hard — абстрактный факт, который максимально обобщённо описывает персонажа "
-        f"(Цена: {HINT_PRICES[0]}✨)\n"
+        f"(Цена: {DONATE_AMOUNTS[0]}✨)\n"
         f"2) Medium — факт, который поймут любители и профессионалы, но не многие новички "
-        f"(Цена: {HINT_PRICES[1]}✨)\n"
+        f"(Цена: {DONATE_AMOUNTS[1]}✨)\n"
         f"3) Easy — факт, который будет понятен даже новичкам! "
-        f"(Цена: {HINT_PRICES[2]}✨)\n\n"
-        f"Ниже ты можешь заранее выбрать подсказку, которая будет в игре.\n"
-        f"Если у вас нет подсказок — их можно приобрести в магазине.",
+        f"(Цена: {DONATE_AMOUNTS[2]}✨)\n\n"
+        f"Если у вас нет подсказок — их можно приобрести в в личном кабинете.",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_room")]
         ])
     )
 async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Сработал back_to_room_callback")
     query = update.callback_query
     await query.answer()
-
     user_id = query.from_user.id
-    message = query.message
-
     room_id = await db.get_user_room(user_id)
     if not room_id:
-        await message.reply_text("Ты пока не в комнате. Создай новую /create")
+        await query.message.edit_text("Нет комнаты. Создай новую: /create")
         return
-
     room = await db.get_room(room_id)
     if not room:
-        await message.reply_text("Комната не найдена, попробуй создать новую /create")
-        return
-
-    mode = room.get("mode", DEFAULT_MODE)
-    words, _ = get_words_and_cards_by_mode(mode)
-
-    keyboard = get_room_keyboard()
-    inline_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(text="🧩 Подсказки", callback_data="check_clue")]
-    ])
-
-    await message.reply_text("\u200b", reply_markup=keyboard)
-    await message.reply_text(
-        f"Комната создана!\n\nID комнаты: <code>{room_id}</code>\n"
-        f"Сложность: 1/15\n"
-        f"Тема: {get_theme_name(mode)}\n"
-        f"Слова в пуле: {len(words)}\n"
-        f"Сменить тему: /mode_clash или /mode_dota\n\n"
-        f"Когда все готовы, жми /startgame",
-        parse_mode=ParseMode.HTML,
-        reply_markup=inline_keyboard,
+        return None, None
+    words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
+    reply_keyboard = get_inline_keyboard()
+    await query.message.edit_text(
+        text = get_message_start(room_id,1,get_theme_name(DEFAULT_MODE),len(words)),
+        parse_mode=ParseMode.HTML, reply_markup=reply_keyboard
     )
 @hint_guard
-async def check_clue(update: Update, context: ContextTypes.DEFAULT_TYPE,clue_type : str):
+async def check_clue_callback(update: Update, context: ContextTypes.DEFAULT_TYPE,clue_type : str):
     query = update.callback_query
     await query.answer()
     chat_id = update.effective_chat.id
-
 
 
     hint_type = f"{clue_type}_hints"

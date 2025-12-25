@@ -10,7 +10,6 @@ class UserClue:
             "dota2": self.clue_dota2,
             "clashroyale": self.clue_clashroyale,
         }
-
     def found_clue(
         self,
         game: Literal["dota2", "clashroyale"],
@@ -19,6 +18,5 @@ class UserClue:
     ):
         number = random.randint(0, 4)
         return self.clues[game][hero][complexity][number]
-
 
 clue_obj = UserClue()

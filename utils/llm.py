@@ -32,4 +32,3 @@ def ask_llm(promt: str) -> dict:
     data = json.loads(content)
     return data
 
-
