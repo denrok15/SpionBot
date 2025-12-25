@@ -15,15 +15,27 @@ from telegram.ext import (
 )
 
 from database.actions import db
+from handlers.callback import (
+    back_to_room_callback,
+    check_clue_callback,
+    show_clues_callback,
+)
 from handlers.commands import (
+    buy_hint,
+    buy_hint_cancel_callback,
+    buy_hint_confirm_callback,
+    buy_hint_type_callback,
+    cabinet_action_callback,
     check_subscription_callback,
     create_room,
     donate,
+    donate_amount_callback,
     error_handler,
     get_word,
     handle_text_message,
     join_room,
     leave_room,
+    personal_account,
     precheckout_callback,
     restart_game,
     rules,
@@ -35,14 +47,6 @@ from handlers.commands import (
     start,
     start_game,
     successful_payment_callback,
-    precheckout_callback,
-    personal_account,
-    buy_hint,
-    buy_hint_type_callback,
-    buy_hint_confirm_callback,
-    buy_hint_cancel_callback,
-    cabinet_action_callback,
-    donate_amount_callback,
 )
 from utils.background import generate_clue, periodic_cleanup
 
@@ -72,12 +76,9 @@ async def main():
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         return
-
     asyncio.create_task(periodic_cleanup())
     asyncio.create_task(generate_clue())
-
     application = Application.builder().token(API_TOKEN).build()
-
     handlers = [
         CommandHandler("start", start),
         CommandHandler("create", create_room),
@@ -113,6 +114,15 @@ async def main():
     )
     application.add_handler(
         CallbackQueryHandler(donate_amount_callback, pattern=r"^donate_amount:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(check_clue_callback, pattern=r"^check_clue:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(show_clues_callback, pattern="show_clues")
+    )
+    application.add_handler(
+        CallbackQueryHandler(back_to_room_callback, pattern="back_to_room")
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
