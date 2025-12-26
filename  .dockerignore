@@ -1,0 +1,5 @@
+venv
+.env
+.example.const.py
+.dockerignore
+pyproject.toml
