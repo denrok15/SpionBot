@@ -1,33 +1,41 @@
+version: '3.8'
+
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1111}
+      POSTGRES_DB: ${POSTGRES_DB:-spy_game_bot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
   bot:
     build: .
-    command: ["python", "-m", "main"]
-    env_file:
-      - .env
-    environment:
-      API_TOKEN: ${API_TOKEN:-}
-      API_KEY_LLM: ${API_KEY_LLM:-}
-      URL_LLM: ${URL_LLM:-}
-      DATABASE_URL: ${DATABASE_URL:-}
+    container_name: telegram_bot
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
-  db:
-    image: postgres:16-alpine
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      POSTGRES_DB: ${POSTGRES_DB:-spy_game_bot}
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-spy_game_bot}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-1111}@db:5432/${POSTGRES_DB:-spy_game_bot}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-spy_game_bot}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1111}
     restart: unless-stopped
+
 volumes:
-  pgdata:
+  postgres_data:
