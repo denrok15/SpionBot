@@ -3,3 +3,4 @@
 /const.py
 /.ruff_cache
 /.pycache
+__pycache__
