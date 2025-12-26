@@ -75,7 +75,7 @@ async def main():
         return
 
     asyncio.create_task(periodic_cleanup())
-    asyncio.create_task(generate_clue())
+    #asyncio.create_task(generate_clue())
 
     application = Application.builder().token(API_TOKEN).build()
 
