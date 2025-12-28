@@ -52,7 +52,7 @@ SINGLE_MODE_PLACEHOLDER_URL = (
 )
 BACK_CARD_PATH = Path("static/backCard.png")
 BACK_CARD_BYTES = BACK_CARD_PATH.read_bytes() if BACK_CARD_PATH.exists() else None
-SINGLE_MODE_PLAYER_OPTIONS = [2, 3, 4, 5, 6, 7, 8]
+SINGLE_MODE_PLAYER_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 SINGLE_MODE_SPY_IMAGE_URL = (
     "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
 )
@@ -75,7 +75,11 @@ class SingleModeSession:
 SINGLE_MODE_SESSIONS: Dict[int, SingleModeSession] = {}
 
 
-async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
+async def show_main_menu(
+    user_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    notice: Optional[str] = None,
+):
     keyboard = get_main_keyboard()
 
     room_id = await db.get_user_room(user_id)
@@ -86,20 +90,83 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
         mode = DEFAULT_MODE
 
     theme_name = get_theme_name(mode)
+    base_text = (
+        f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
+        f"📌 <b>Команды для начала:</b>\n"
+        f"• /create — создать комнату\n"
+        f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
+        f"• /startgame — начать игру\n"
+        f"• /single — игра с 1 устройства\n\n"
+        f"👑 Игру создали It tut Денис и Артур!"
+    )
+    text = f"{notice}\n\n{base_text}" if notice else base_text
     await context.bot.send_message(
         chat_id=user_id,
-        text=(
-            f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
-            f"📌 <b>Команды для начала:</b>\n"
-            f"• /create — создать комнату\n"
-            f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
-            f"• /startgame — начать игру\n\n"
-            f"🎴 <b>Текущая тематика:</b> {theme_name}\n"
-            f"👑 Игру создали It tut Денис и Артур!"
-        ),
+        text=text,
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
+
+
+def _get_display_name(user):
+    if not user:
+        return "Игрок"
+    return user.full_name or user.username or "Игрок"
+
+
+def _parse_referral_code(code: str) -> Optional[int]:
+    if not code:
+        return None
+    normalized = code.strip().lower()
+    if not normalized.startswith("ref"):
+        return None
+    remainder = normalized[3:].lstrip("-_")
+    if not remainder.isdigit():
+        return None
+    inviter_id = int(remainder)
+    if inviter_id <= 0:
+        return None
+    return inviter_id
+
+
+async def _handle_referral_start(
+    user_id: int,
+    code: str,
+    friend_name: str,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> Optional[str]:
+    inviter_id = _parse_referral_code(code)
+    if not inviter_id or inviter_id == user_id:
+        return None
+
+    existing_inviter = await db.get_referrer(user_id)
+    if existing_inviter:
+        return None
+
+    created = await db.create_referral(user_id, inviter_id)
+    if not created:
+        return None
+
+    inviter_balance = await db.add_balance(inviter_id, 2)
+    friend_balance = await db.add_balance(user_id, 1)
+
+    friend_display = friend_name or "Друг"
+
+    inviter_message = (
+        f"🎉 {friend_display} присоединился по вашей реферальной ссылке и вы получили 2⭐!"
+    )
+    if inviter_balance is not None:
+        inviter_message += f"\n⭐ Баланс: {inviter_balance}⭐"
+
+    try:
+        await context.bot.send_message(inviter_id, inviter_message)
+    except Exception:
+        pass
+
+    friend_message = "🎉 Вы получили 1⭐ за регистрацию по реферальной ссылке!"
+    if friend_balance is not None:
+        friend_message += f"\n⭐ Баланс: {friend_balance}⭐"
+    return friend_message
 
 
 def _build_single_mode_selection_keyboard() -> InlineKeyboardMarkup:
@@ -271,12 +338,24 @@ async def check_subscription_callback(
 @decorators.rate_limit()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
+    referral_notice = None
+    message_text = (update.message.text or "").strip()
+    command = message_text.split()[0] if message_text else ""
+    if command.startswith("/start"):
+        args = context.args or []
+        if args:
+            friend_name = _get_display_name(update.effective_user)
+            referral_notice = await _handle_referral_start(
+                user_id, args[0], friend_name, context
+            )
     if not await is_subscribed(context.bot, user_id):
+        if referral_notice:
+            await update.message.reply_text(referral_notice)
         await update.message.reply_text(
             "❗ Чтобы играть, подпишись на канал:", reply_markup=subscribe_keyboard()
         )
         return
-    await show_main_menu(user_id, context)
+    await show_main_menu(user_id, context, notice=referral_notice)
 
 
 @subscription_required
@@ -287,8 +366,7 @@ async def single_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     SINGLE_MODE_SESSIONS.pop(user_id, None)
     keyboard = _build_single_mode_selection_keyboard()
     await update.message.reply_text(
-        "🃏 Выберите, сколько игроков будет по очереди смотреть карту. "
-        "Нажимайте «Вперёд» и «Назад», а после просмотра передавайте телефон.",
+        "🃏 Выберите количество игроков",
         reply_markup=keyboard,
     )
 
@@ -1109,6 +1187,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await leave_room(update, context)
     elif text == "👤 Личный кабинет":
         await personal_account(update, context)
+    elif text == "🎁 Реферальная система":
+        await referral_system(update, context)
     elif text == "ℹ️ Помощь" or text == "🏠 Главное меню":
         user_id = update.effective_user.id
         room_id = await db.get_user_room(user_id)
@@ -1325,6 +1405,49 @@ async def _get_account_summary(user_id: int):
         account.get("easy_hints", 0) or 0,
     )
 
+
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+async def referral_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    bot_username = context.bot.username or ""
+    referral_code = f"ref{user_id}"
+    referral_link = (
+        f"https://t.me/{bot_username}?start={referral_code}" if bot_username else None
+    )
+    total_referrals = await db.get_referral_count(user_id)
+    earned_stars = total_referrals * 2
+    lines = [
+        "<b>🎁 Реферальная система</b>",
+        "",
+        "🎯 Поделитесь ссылкой и получайте бонусы.",
+        "Каждый приглашённый приносит вам 2⭐, а ему достаётся 1⭐.",
+    ]
+    if referral_link:
+        lines.append(
+            f"🔗 Ваша ссылка: <a href=\"{referral_link}\">{referral_link}</a>"
+        )
+    lines.extend(
+        [
+            f"🆔 Код: <code>{referral_code}</code>",
+            f"👥 Приглашено друзей: {total_referrals}",
+            f"💰 Вы заработали: {earned_stars}⭐",
+        ]
+    )
+    keyboard = []
+    if referral_link:
+        keyboard.append(
+            [InlineKeyboardButton("🔗 Поделиться ссылкой", url=referral_link)]
+        )
+    keyboard.append(
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="cabinet:menu")]
+    )
+    await update.message.reply_text(
+        "\n".join(lines),
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 
 @subscription_required

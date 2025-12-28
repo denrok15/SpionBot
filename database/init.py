@@ -66,4 +66,11 @@ class CreateDB:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS referrals (
+                    user_id BIGINT PRIMARY KEY,
+                    inviter_id BIGINT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 db_init = CreateDB()
