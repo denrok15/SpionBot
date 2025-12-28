@@ -7,16 +7,17 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1111}
       POSTGRES_DB: ${POSTGRES_DB:-spy_game_bot}
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    restart: unless-stopped
+      
+"5432:5432"
+  volumes:
+postgres_data:/var/lib/postgresql/data
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U postgres"]
+  interval: 10s
+  timeout: 5s
+  retries: 10
+  start_period: 30s
+restart: unless-stopped
 
   bot:
     build: .
@@ -25,15 +26,54 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - .env
+      
+.env
+  environment:
+    DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-1111}@db:5432/${POSTGRES_DB:-spy_game_bot}
+    DB_HOST: db
+    DB_PORT: 5432
+    DB_NAME: ${POSTGRES_DB:-spy_game_bot}
+    DB_USER: ${POSTGRES_USER:-postgres}
+    DB_PASSWORD: ${POSTGRES_PASSWORD:-1111}
+  restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-1111}@db:5432/${POSTGRES_DB:-spy_game_bot}
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-spy_game_bot}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-1111}
-    restart: unless-stopped
+      
+discovery.type=single-node
+xpack.security.enabled=false
+ES_JAVA_OPTS=-Xms512m -Xmx512m
+ports:
+"9200:9200"
+volumes:
+esdata:/usr/share/elasticsearch/data
+restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    ports:
+      
+"5601:5601"
+  depends_on:
+elasticsearch
+restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: filebeat
+    user: root
+    volumes:
+      
+/var/lib/docker/containers:/var/lib/docker/containers:ro
+/var/run/docker.sock:/var/run/docker.sock:ro
+./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+depends_on:
+elasticsearch
+restart: unless-stopped
 
 volumes:
   postgres_data:
+  esdata:
