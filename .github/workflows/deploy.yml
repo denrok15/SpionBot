@@ -2,14 +2,79 @@ name: Deploy to Yandex Cloud
 
 on:
   workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deploy even if other workflows are running'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
+  check-workflows:
+    runs-on: ubuntu-latest
+    outputs:
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
+      running_workflows: ${{ steps.check.outputs.running_workflows }}
+    
+    steps:
+    - name: Check for running workflows
+      id: check
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          
+          const runs = await github.rest.actions.listWorkflowRunsForRepo({
+            owner,
+            repo,
+            status: 'in_progress',
+            per_page: 50
+          });
+          
+          const currentRunId = context.runId;
+          const otherRuns = runs.data.workflow_runs.filter(run => 
+            run.id !== currentRunId && 
+            run.status === 'in_progress'
+          );
+          
+          if (otherRuns.length > 0) {
+            const workflowNames = otherRuns.map(run => run.name).join(', ');
+            console.log(`⚠️ Found ${otherRuns.length} other workflows in progress:`);
+            console.log(workflowNames);
+            const forceDeploy = '${{ github.event.inputs.force_deploy }}' === 'true';
+            
+            if (!forceDeploy) {
+              core.setOutput('can_deploy', 'false');
+              core.setOutput('running_workflows', workflowNames);
+              core.setFailed(`Cannot deploy while other workflows are running: ${workflowNames}. Use force_deploy option to override.`);
+              return;
+            } else {
+              console.log('⚠️ Force deploy enabled - proceeding despite running workflows');
+            }
+          }
+          
+          core.setOutput('can_deploy', 'true');
+          core.setOutput('running_workflows', '');
+
   deploy:
     runs-on: ubuntu-latest
+    needs: check-workflows
+    if: needs.check-workflows.outputs.can_deploy == 'true'
     
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Warning about concurrent workflows
+      if: needs.check-workflows.outputs.running_workflows != ''
+      run: |
+        echo "⚠️ WARNING: The following workflows are still running:"
+        echo "${{ needs.check-workflows.outputs.running_workflows }}"
+        echo "Proceeding with deployment as force_deploy was enabled..."
+        echo ""
 
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.3
@@ -22,12 +87,20 @@ jobs:
         script: |
           cd SpionBot
           
+          echo "📦 Stopping containers..."
           docker compose down
           
+          echo "🔁 Pulling latest changes..."
           git pull origin main
           
+          echo "🚀 Building and starting containers..."
           docker compose up -d --build
+          
+          echo "🧹 Cleaning up old images..."
           docker image prune -f
           
+          echo "📊 Checking container status..."
+          sleep 3
           docker compose ps
-          echo "✅ Deployment completed!"
+          
+          echo "✅ Deployment completed successfully!"
