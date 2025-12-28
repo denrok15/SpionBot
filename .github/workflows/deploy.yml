@@ -1,1 +1,33 @@
+name: Deploy to Yandex Cloud
 
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: 51.250.99.137
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        port: 22
+        script: |
+          cd SpionBot
+          
+          docker compose down
+          
+          git pull origin main
+          
+          docker compose up -d --build
+          docker image prune -f
+          
+          docker compose ps
+          echo "✅ Deployment completed!"
