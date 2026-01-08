@@ -4,12 +4,12 @@ filebeat.inputs:
       - /var/lib/docker/containers/*/*.log
     processors:
       - add_docker_metadata: ~
-    ignore_older: 0
+    ignore_older: 0          # не игнорировать старые логи, считываем всё
 
 queue.mem:
   events: 4096
-  flush.min_events: 1
-  flush.timeout: 1s
+  flush.min_events: 1       # отправлять сразу после 1 события
+  flush.timeout: 1s         # таймаут на отправку пачки 1 секунда
 
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
