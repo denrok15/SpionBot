@@ -22,3 +22,13 @@ def get_room_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=False,
     )
+
+
+def get_room_mode_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [["🎲 Дота 2", "🃏 Clash Royale", "🎮 Brawl Stars"],
+         ["🚪 Выйти из комнаты", "🏠 Главное меню"],
+         ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+    )
