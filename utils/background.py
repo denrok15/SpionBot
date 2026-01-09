@@ -1,9 +1,11 @@
 import asyncio
 import logging
 
-from const import PROMPTS
+from const import PROMPTS, game_array
 from database.actions import db
-from utils.clue import clue_obj,take_clue_serves
+from utils.clue import clue_obj
+from utils.llm import ask_llm
+
 logger = logging.getLogger(__name__)
 
 async def periodic_cleanup() -> None:
@@ -17,12 +19,20 @@ async def periodic_cleanup() -> None:
         except Exception as e:
             logger.error(f"Error in periodic cleanup: {e}")
         await asyncio.sleep(1800)
+
+
 async def generate_clue() -> None:
-    await asyncio.sleep(5)
+    await asyncio.sleep(1800)
     while True:
         for game in PROMPTS:
-            response = take_clue_serves(game)
-            setattr(clue_obj, f"clue_{game}", response)
-            logger.info(f"Generated clue for {game}")
-        await asyncio.sleep(86400)
-
+            for Heroname in game_array[game]:
+                try:
+                    result = ask_llm(
+                        PROMPTS[game].replace("{Heroname}", Heroname)
+                    )
+                    getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]
+                    logger.info(f"Generated clue: {result}")
+                except Exception as e:
+                    logger.error(f"Error in generate_clue: {e}")
+            logger.info(f"Подсказки для {game} обновлены")
+        await asyncio.sleep(1800)
