@@ -5,16 +5,9 @@ from database.actions import db
 from utils.clue import take_clue_serves
 import os
 from utils.clue import clue_obj
-
+import requests
 logger = logging.getLogger(__name__)
-
-URL_SERVICE = os.getenv("URL_SERVICE")
-HASH = os.getenv("HASH")
-
-
-
-
-
+URL = os.getenv("URL")
 async def periodic_cleanup() -> None:
     """Фоновая задача для очистки старых данных"""
     while True:
@@ -36,3 +29,11 @@ async def generate_clue() -> None:
             setattr(clue_obj, f"clue_{game}", response)
             logger.info(f"Generated clue for {game}: {response.text}")
         await asyncio.sleep(86400)
+async def update_connect() -> None:
+    while True:
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(URL, headers=headers)
+        await asyncio.sleep(60)

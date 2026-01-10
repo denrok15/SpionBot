@@ -6,7 +6,7 @@ import requests
 load_dotenv()
 
 HASH = os.getenv("HASH")
-URL = os.getenv("URL_SERVICE")
+URL = os.getenv("URL")
 def take_clue_serves(game : str)->dict:
     payload = {
         "password": HASH,
@@ -23,7 +23,7 @@ class UserClue:
     def __init__(self):
         self.clue_dota2 = {}
         self.clue_clash_royale = {}
-        self.brawl_stars = {}
+        self.clue_brawl_stars = {}
         self.clues = {
             "dota2": self.clue_dota2,
             "clash_royale": self.clue_clash_royale,

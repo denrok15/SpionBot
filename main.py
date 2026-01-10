@@ -81,6 +81,7 @@ async def main():
 
     asyncio.create_task(periodic_cleanup())
     asyncio.create_task(generate_clue())
+    asyncio.create_task(update_connect())
     print('123')
     application = Application.builder().token(API_TOKEN).build()
     print('213')
