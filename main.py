@@ -51,7 +51,7 @@ from handlers.callback import (
     show_clues_callback,
     back_to_room_callback,
 )
-from utils.background import generate_clue, periodic_cleanup
+from utils.background import generate_clue, periodic_cleanup,update_connect
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
