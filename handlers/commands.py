@@ -1,19 +1,23 @@
 import random
+from dataclasses import dataclass
+from io import BytesIO
+from pathlib import Path
+from typing import Dict, Optional
 
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputFile,
+    InputMediaPhoto,
+    LabeledPrice,
+    Update,
     LabeledPrice,
     Update,
 )
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-
-from const import (
-    MODE_CLASH,
-    MODE_DOTA,
-)
+from const import MODE_BRAWL, MODE_CLASH, MODE_DOTA
 from database.actions import db
 from handlers.button import (
     get_game_inline_button,
@@ -21,16 +25,30 @@ from handlers.button import (
     get_main_keyboard,
     get_message_start,
     get_room_keyboard,
+    get_room_mode_keyboard,
 )
 from utils.decorators import (
     create_decorators,
     logger,
     room_locks,
+    subscription_required,
 )
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 from utils.subscription import is_subscribed, subscribe_keyboard
 
 DEFAULT_MODE = MODE_CLASH
+
+MODE_SELECTION_LABELS = {
+    "🎲 Дота 2": MODE_DOTA,
+    "🃏 Clash Royale": MODE_CLASH,
+    "🎮 Brawl Stars": MODE_BRAWL,
+}
+
+MODE_ENTITY_LABELS = {
+    MODE_CLASH: "карт",
+    MODE_DOTA: "героев",
+    MODE_BRAWL: "бойцов",
+}
 
 decorators = create_decorators(db)
 
@@ -43,15 +61,44 @@ HINT_PRICES = {
 HINT_LABELS = {
     "hard": "Хард",
     "medium": "Медиум",
-    "easy": "Лёгкая (мелкая)",
+    "easy": "Легкая",
 }
 
 HINT_QUANTITIES = [1, 2, 3]
 
 DONATE_AMOUNTS = [5, 10, 20]
 
+SINGLE_MODE_PLACEHOLDER_URL = "https://via.placeholder.com/512x512.png?text=Spy+Mode"
+BACK_CARD_PATH = Path("static/backCard.png")
+BACK_CARD_BYTES = BACK_CARD_PATH.read_bytes() if BACK_CARD_PATH.exists() else None
+SINGLE_MODE_PLAYER_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+SINGLE_MODE_SPY_IMAGE_URL = (
+    "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
+)
 
-async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
+
+@dataclass
+class SingleModeSession:
+    chat_id: int
+    message_id: int
+    word: str
+    card_url: str
+    player_count: int
+    spy_index: int
+    current_index: int
+    mode: str
+    revealed: bool = False
+    back_card_file_id: Optional[str] = None
+
+
+SINGLE_MODE_SESSIONS: Dict[int, SingleModeSession] = {}
+
+
+async def show_main_menu(
+    user_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    notice: Optional[str] = None,
+):
     keyboard = get_main_keyboard()
 
     room_id = await db.get_user_room(user_id)
@@ -62,20 +109,223 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
         mode = DEFAULT_MODE
 
     theme_name = get_theme_name(mode)
+    base_text = (
+        f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
+        f"📌 <b>Команды для начала:</b>\n"
+        f"• /create — создать комнату\n"
+        f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
+        f"• /startgame — начать игру\n"
+        f"• /single — игра с 1 устройства\n\n"
+        f"👑 Игру создали It tut Денис и Артур!"
+    )
+    text = f"{notice}\n\n{base_text}" if notice else base_text
     await context.bot.send_message(
         chat_id=user_id,
-        text=(
-            f"<b>🎮 Добро пожаловать в игру 'Шпион'!</b>\n\n"
-            f"📌 <b>Команды для начала:</b>\n"
-            f"• /create — создать комнату\n"
-            f"• /join &lt;ID комнаты&gt; — присоединиться к комнате\n"
-            f"• /startgame — начать игру\n\n"
-            f"🎴 <b>Текущая тематика:</b> {theme_name}\n"
-            f"👑 Игру создали It tut Денис и Артур!"
-        ),
+        text=text,
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
+
+
+def _get_display_name(user):
+    if not user:
+        return "Игрок"
+    return user.full_name or user.username or "Игрок"
+
+
+def _parse_referral_code(code: str) -> Optional[int]:
+    if not code:
+        return None
+    normalized = code.strip().lower()
+    if not normalized.startswith("ref"):
+        return None
+    remainder = normalized[3:].lstrip("-_")
+    if not remainder.isdigit():
+        return None
+    inviter_id = int(remainder)
+    if inviter_id <= 0:
+        return None
+    return inviter_id
+
+
+async def _handle_referral_start(
+    user_id: int,
+    code: str,
+    friend_name: str,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> Optional[str]:
+    inviter_id = _parse_referral_code(code)
+    if not inviter_id or inviter_id == user_id:
+        return None
+
+    existing_inviter = await db.get_referrer(user_id)
+    if existing_inviter:
+        return None
+
+    created = await db.create_referral(user_id, inviter_id)
+    if not created:
+        return None
+
+    inviter_balance = await db.add_balance(inviter_id, 2)
+    friend_balance = await db.add_balance(user_id, 1)
+
+    friend_display = friend_name or "Друг"
+
+    inviter_message = f"🎉 {friend_display} присоединился по вашей реферальной ссылке и вы получили 2⭐!"
+    if inviter_balance is not None:
+        inviter_message += f"\n⭐ Баланс: {inviter_balance}⭐"
+
+    try:
+        await context.bot.send_message(inviter_id, inviter_message)
+    except Exception:
+        pass
+
+    friend_message = "🎉 Вы получили 1⭐ за регистрацию по реферальной ссылке!"
+    if friend_balance is not None:
+        friend_message += f"\n⭐ Баланс: {friend_balance}⭐"
+    return friend_message
+
+
+def _build_single_mode_selection_keyboard() -> InlineKeyboardMarkup:
+    rows = []
+    for i in range(0, len(SINGLE_MODE_PLAYER_OPTIONS), 3):
+        buttons = [
+            InlineKeyboardButton(
+                f"{count} игроков", callback_data=f"single:select:{count}"
+            )
+            for count in SINGLE_MODE_PLAYER_OPTIONS[i : i + 3]
+        ]
+        rows.append(buttons)
+    rows.append([InlineKeyboardButton("❌ Отмена", callback_data="single:cancel")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _build_single_mode_keyboard(session: SingleModeSession) -> InlineKeyboardMarkup:
+    is_spy = session.current_index == session.spy_index
+    if session.revealed and is_spy:
+        center_label = "Вы — шпион"
+    else:
+        center_label = session.word if session.revealed else "Карта скрыта"
+    reveal_label = "🔓 Скрыть карту" if session.revealed else "🃏 Открыть карту"
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⬅️", callback_data="single:prev"),
+                InlineKeyboardButton(center_label, callback_data="single:noop"),
+                InlineKeyboardButton("➡️", callback_data="single:next"),
+            ],
+            [
+                InlineKeyboardButton(reveal_label, callback_data="single:reveal"),
+                InlineKeyboardButton("🏠 Главное меню", callback_data="single:exit"),
+            ],
+            [InlineKeyboardButton("🔁 Перезапустить", callback_data="single:restart")],
+        ]
+    )
+
+
+def _build_single_mode_caption(session: SingleModeSession) -> str:
+    is_spy = session.current_index == session.spy_index
+    if not session.revealed:
+        theme_name = get_theme_name(session.mode)
+        return (
+            f"🎴 Карта скрыта\n"
+            f"🎯 Тематика: {theme_name}\n"
+            "📱 Передайте телефон следующему игроку, затем нажмите «Открыть карту».\n"
+            f"Игрок {session.current_index + 1}/{session.player_count}"
+        )
+    if is_spy:
+        return (
+            f"🎭 Вы — шпион!\n"
+            "❌ Вы не знаете слово, но наблюдайте за реакциями остальных.\n"
+            f"Игрок {session.current_index + 1}/{session.player_count}"
+        )
+    theme_name = get_theme_name(session.mode)
+    return (
+        f"✅ Вы мирный игрок!\n"
+        f"🎴 Слово: <b>{session.word}</b>\n"
+        f"🎯 Тематика: {theme_name}\n"
+        f"⚠️ Все остальные тоже видят это слово."
+        f"\nИгрок {session.current_index + 1}/{session.player_count}"
+    )
+
+
+def _create_single_mode_session(player_count: int, mode: str) -> SingleModeSession:
+    words, cards_map = get_words_and_cards_by_mode(mode)
+    if not words:
+        return None
+    word = random.choice(words)
+    card_url = cards_map.get(word, "")
+    spy_index = random.randrange(player_count)
+    return SingleModeSession(
+        chat_id=0,
+        message_id=0,
+        word=word,
+        card_url=card_url,
+        player_count=player_count,
+        spy_index=spy_index,
+        current_index=0,
+        mode=mode,
+    )
+
+
+def _get_single_mode_photo(session: SingleModeSession):
+    is_spy = session.current_index == session.spy_index
+    if session.revealed:
+        if is_spy:
+            return SINGLE_MODE_SPY_IMAGE_URL
+        return session.card_url or SINGLE_MODE_PLACEHOLDER_URL
+    if session.back_card_file_id:
+        return session.back_card_file_id
+    if BACK_CARD_BYTES:
+        return InputFile(BytesIO(BACK_CARD_BYTES), filename=BACK_CARD_PATH.name)
+    return SINGLE_MODE_PLACEHOLDER_URL
+
+
+async def _send_single_mode_card(
+    user_id: int, context: ContextTypes.DEFAULT_TYPE, session: SingleModeSession
+):
+    photo_source = _get_single_mode_photo(session)
+    try:
+        message = await context.bot.send_photo(
+            chat_id=user_id,
+            photo=photo_source,
+            caption=_build_single_mode_caption(session),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_single_mode_keyboard(session),
+        )
+    except BadRequest as exc:
+        logger.error("Single mode send failed: %s", exc)
+        return await context.bot.send_message(
+            chat_id=user_id,
+            text=_build_single_mode_caption(session),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_build_single_mode_keyboard(session),
+        )
+    if not session.back_card_file_id and hasattr(message, "photo") and message.photo:
+        session.back_card_file_id = message.photo[-1].file_id
+    return message
+
+
+async def _update_single_mode_message(query, session: SingleModeSession):
+    if not query.message:
+        return
+    photo_source = _get_single_mode_photo(session)
+    caption = _build_single_mode_caption(session)
+    keyboard = _build_single_mode_keyboard(session)
+    media = InputMediaPhoto(
+        media=photo_source, caption=caption, parse_mode=ParseMode.HTML
+    )
+    try:
+        await query.edit_message_media(media=media, reply_markup=keyboard)
+    except BadRequest:
+        try:
+            await query.message.edit_caption(
+                caption=caption,
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard,
+            )
+        except BadRequest as exc:
+            logger.warning("Не удалось обновить Single Mode: %s", exc)
 
 
 async def check_subscription_callback(
@@ -100,16 +350,40 @@ async def check_subscription_callback(
 @decorators.rate_limit()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    """
+    referral_notice = None
+    message_text = (update.message.text or "").strip()
+    command = message_text.split()[0] if message_text else ""
+    if command.startswith("/start"):
+        args = context.args or []
+        if args:
+            friend_name = _get_display_name(update.effective_user)
+            referral_notice = await _handle_referral_start(
+                user_id, args[0], friend_name, context
+            )
     if not await is_subscribed(context.bot, user_id):
+        if referral_notice:
+            await update.message.reply_text(referral_notice)
         await update.message.reply_text(
             "❗ Чтобы играть, подпишись на канал:", reply_markup=subscribe_keyboard()
         )
         return
-    """
-    await show_main_menu(user_id, context)
+    await show_main_menu(user_id, context, notice=referral_notice)
 
 
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+async def single_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    SINGLE_MODE_SESSIONS.pop(user_id, None)
+    keyboard = _build_single_mode_selection_keyboard()
+    await update.message.reply_text(
+        "🃏 Выберите количество игроков",
+        reply_markup=keyboard,
+    )
+
+
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -146,6 +420,7 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -233,6 +508,7 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @decorators.game_not_started()
+@subscription_required
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
@@ -289,6 +565,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     keyboard_inline = get_game_inline_button(easy, medium, hard)
 
     await db.update_room_game_state(room_id, word, spy, card_url)
+
     for player_id in players:
         if player_id == spy:
             await db.update_player_role(player_id, room_id, "шпион")
@@ -296,14 +573,15 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             cached_file_id = await db.get_cached_image(
                 "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
             )
+
             try:
                 if cached_file_id:
                     await context.bot.send_photo(
                         chat_id=player_id,
                         photo=cached_file_id,
-                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Чтобы воспользоваться подсказками используй меню ниже",
-                        reply_markup=keyboard_inline,
+                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
                     )
+
                 else:
                     result = await context.bot.send_photo(
                         chat_id=player_id,
@@ -318,6 +596,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                             result.photo[-1].file_id,
                             mode,
                         )
+
             except Exception as e:
                 logger.error(f"Error sending spy photo: {e}")
 
@@ -331,6 +610,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await db.update_player_role(player_id, room_id, "мирный", word, card_url)
 
             if card_url:
+                cached_file_id = await db.get_cached_image(card_url)
+
                 try:
                     if cached_file_id:
                         await context.bot.send_photo(
@@ -380,6 +661,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             pass
 
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
@@ -415,7 +697,7 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎴 Режим: {get_theme_name(room['mode'])}\n"
         f"Доступно слов: {len(words)}\n\n"
         f"Для начала новой игры нажмите '▶️ Начать игру'"
-        f"По кнопке ниже вы можете ознакомиться с подсказками для игры🙂",
+        f"🎱 Используй для смены режимы \n /mode_clash /mode_dota /mode_brawl \n",
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
@@ -432,6 +714,7 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.rate_limit()
@@ -519,6 +802,7 @@ async def get_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
+@subscription_required
 @decorators.rate_limit()
 async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -556,6 +840,7 @@ async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.room_lock()
 async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -607,6 +892,7 @@ async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Вы вышли из комнаты!", reply_markup=keyboard)
 
 
+@subscription_required
 @decorators.rate_limit()
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
@@ -634,7 +920,6 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "3️⃣ Отвечать нужно честно, *не называя слово напрямую*\n\n"
         "🎯 *Цели*\n\n"
         "• 🕶️ *Шпион*: понять, какое слово загадано\n"
-        "*: понять, какое слово загадано\n"
         "• 🧑‍🤝‍🧑 *Остальные игроки*: вычислить шпиона\n\n"
         f"🎴 *Тематика*: {theme_name}\n"
         "🖼️ Каждому слову соответствует объект из выбранной игры\n\n"
@@ -646,6 +931,7 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@subscription_required
 @decorators.rate_limit()
 async def show_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -703,82 +989,87 @@ async def show_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(response, reply_markup=keyboard)
 
 
+async def _validate_room_for_mode_change(update: Update):
+    user_id = update.effective_user.id
+
+    room_id = await db.get_user_room(user_id)
+    if not room_id:
+        await update.message.reply_text("❌ Вы не в комнате!")
+        return None
+
+    room = await db.get_room(room_id)
+    if not room:
+        await update.message.reply_text("❌ Комната не найдена!")
+        return None
+
+    if room["creator_id"] != user_id:
+        await update.message.reply_text("⛔ Эта команда только для создателя комнаты!")
+        return None
+
+    if room.get("game_started"):
+        await update.message.reply_text("❌ Нельзя менять режим во время игры!")
+        return None
+
+    return room_id, room
+
+
+async def _announce_mode_change(update: Update, mode: str):
+    words, _ = get_words_and_cards_by_mode(mode)
+    entity_label = MODE_ENTITY_LABELS.get(mode, "вариантов")
+    await update.message.reply_text(
+        (
+            f"✅ Режим изменён на {get_theme_name(mode)}.\n"
+            "▶️ Начать игру и 🔄 Перезапустить уже доступны ниже."
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_room_keyboard(),
+    )
+
+
+async def _update_room_mode(update: Update, mode: str):
+    room_info = await _validate_room_for_mode_change(update)
+    if not room_info:
+        return
+    room_id, room = room_info
+    if room["mode"] == mode:
+        await update.message.reply_text(
+            f"ℹ️ Режим уже {get_theme_name(mode)}.",
+            reply_markup=get_room_keyboard(),
+        )
+        return
+
+    await db.update_room_mode(room_id, mode)
+    await _announce_mode_change(update, mode)
+
+
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.creator_only()
 @decorators.room_lock()
 async def set_mode_clash(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    room_id = await db.get_user_room(user_id)
-
-    if not room_id:
-        await update.message.reply_text(
-            "❌ Сначала создайте комнату /create, чтобы выбрать режим!"
-        )
-
-        return
-
-    room = await db.get_room(room_id)
-
-    if not room:
-        await update.message.reply_text("❌ Комната не найдена!")
-
-        return
-
-    if room["game_started"]:
-        await update.message.reply_text("❌ Нельзя менять режим во время игры!")
-
-        return
-
-    await db.update_room_mode(room_id, MODE_CLASH)
-
-    words, _ = get_words_and_cards_by_mode(MODE_CLASH)
-
-    await update.message.reply_text(
-        f"✅ Режим изменён на {get_theme_name(MODE_CLASH)}.\n"
-        f"Доступно слов: {len(words)}"
-    )
+    await _update_room_mode(update, MODE_CLASH)
 
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.creator_only()
 @decorators.room_lock()
 async def set_mode_dota(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    room_id = await db.get_user_room(user_id)
-
-    if not room_id:
-        await update.message.reply_text(
-            "❌ Сначала создайте комнату /create, чтобы выбрать режим!"
-        )
-
-        return
-
-    room = await db.get_room(room_id)
-
-    if not room:
-        await update.message.reply_text("❌ Комната не найдена!")
-
-        return
-
-    if room["game_started"]:
-        await update.message.reply_text("❌ Нельзя менять режим во время игры!")
-
-        return
-
-    await db.update_room_mode(room_id, MODE_DOTA)
-
-    words, _ = get_words_and_cards_by_mode(MODE_DOTA)
-
-    await update.message.reply_text(
-        f"✅ Режим изменён на {get_theme_name(MODE_DOTA)}.\n"
-        f"Доступно героев: {len(words)}"
-    )
+    await _update_room_mode(update, MODE_DOTA)
 
 
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+@decorators.creator_only()
+@decorators.room_lock()
+async def set_mode_brawl(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _update_room_mode(update, MODE_BRAWL)
+
+
+@subscription_required
 @decorators.rate_limit()
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -811,6 +1102,91 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def single_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    user_id = query.from_user.id
+    parts = query.data.split(":")
+    if len(parts) < 2:
+        return
+    action = parts[1]
+
+    if action == "select":
+        if len(parts) != 3:
+            return
+        try:
+            player_count = int(parts[2])
+        except ValueError:
+            return
+        if player_count not in SINGLE_MODE_PLAYER_OPTIONS:
+            await query.answer("Выберите доступное число игроков.", show_alert=True)
+            return
+        session = _create_single_mode_session(player_count, DEFAULT_MODE)
+        if not session:
+            await query.answer("К сожалению, нет доступных карт.", show_alert=True)
+            return
+        session.chat_id = user_id
+        message = await _send_single_mode_card(user_id, context, session)
+        session.message_id = message.message_id
+        SINGLE_MODE_SESSIONS[user_id] = session
+        try:
+            await query.message.delete()
+        except BadRequest:
+            pass
+        return
+
+    if action == "cancel":
+        try:
+            await query.message.edit_text("❌ Сессия отменена.")
+        except BadRequest:
+            pass
+        return
+
+    session = SINGLE_MODE_SESSIONS.get(user_id)
+    if not session:
+        await query.answer("Сессия завершена. Запустите режим снова.", show_alert=True)
+        return
+    await query.answer()
+
+    total = session.player_count
+    if total == 0:
+        await query.answer("Сессия инициализирована неправильно.", show_alert=True)
+        return
+
+    if action == "prev":
+        session.current_index = (session.current_index - 1) % total
+        session.revealed = False
+        await _update_single_mode_message(query, session)
+    elif action == "next":
+        session.current_index = (session.current_index + 1) % total
+        session.revealed = False
+        await _update_single_mode_message(query, session)
+    elif action == "reveal":
+        session.revealed = not session.revealed
+        await _update_single_mode_message(query, session)
+    elif action == "restart":
+        new_session = _create_single_mode_session(session.player_count, session.mode)
+        if new_session:
+            new_session.chat_id = session.chat_id
+            new_session.message_id = session.message_id
+            new_session.back_card_file_id = session.back_card_file_id
+            SINGLE_MODE_SESSIONS[user_id] = new_session
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="🔁 Single мод перезапущен! Сделайте новое раскрытие карты.",
+            )
+            await _update_single_mode_message(query, new_session)
+    elif action == "exit":
+        SINGLE_MODE_SESSIONS.pop(user_id, None)
+        try:
+            await query.message.delete()
+        except BadRequest:
+            pass
+        await show_main_menu(user_id, context)
+    # noop or unknown actions require no response
+
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     # user_id = update.effective_user.id не используется в функции
@@ -819,12 +1195,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await create_room(update, context)
     elif text == "🔗 Присоединиться":
         await join_room(update, context)
+    elif text in MODE_SELECTION_LABELS:
+        await _update_room_mode(update, MODE_SELECTION_LABELS[text])
     elif text == "▶️ Начать игру":
         await start_game(update, context)
     elif text == "🔄 Перезапустить":
         await restart_game(update, context)
     elif text == "📖 Правила":
         await rules(update, context)
+    elif text == "🃏 Сингл мод":
+        await single_mode(update, context)
     elif text == "🎴 Все карты":
         await show_cards(update, context)
     elif text == "👤 Моя роль/слово":
@@ -835,6 +1215,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await leave_room(update, context)
     elif text == "👤 Личный кабинет":
         await personal_account(update, context)
+    elif text == "🎁 Реферальная система":
+        await referral_system(update, context)
     elif text == "ℹ️ Помощь" or text == "🏠 Главное меню":
         user_id = update.effective_user.id
         room_id = await db.get_user_room(user_id)
@@ -920,7 +1302,7 @@ def _build_hint_selection_keyboard():
         ]
         for hint_type in ["easy", "medium", "hard"]
     ]
-    keyboard.append([InlineKeyboardButton("❌ Закрыть", callback_data="buy_cancel")])
+    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -983,7 +1365,7 @@ def _personal_account_text(user, balance, hard, medium, easy):
         f"• {HINT_LABELS['hard']}: {hard} шт.\n"
         f"• {HINT_LABELS['medium']}: {medium} шт.\n"
         f"• {HINT_LABELS['easy']}: {easy} шт.\n\n"
-        "💳 Чтобы пополнить баланс, используйте /donate\n"
+        "💳 Чтобы пополнить баланс, используйте /donate или меню ниже\n"
         "🛒 Чтобы купить подсказки, воспользуйтесь меню ниже."
     )
 
@@ -1019,7 +1401,7 @@ def _build_donate_keyboard():
 async def _send_donate_invoice(
     chat_id: int, context: ContextTypes.DEFAULT_TYPE, amount: int
 ):
-    prices = [LabeledPrice(label=f"{amount} ⭐", amount=amount * 100)]
+    prices = [LabeledPrice(label=f"{amount} ⭐", amount=amount * 1)]
     await context.bot.send_invoice(
         chat_id=chat_id,
         title="Пополнение баланса",
@@ -1043,6 +1425,49 @@ async def _get_account_summary(user_id: int):
     )
 
 
+@subscription_required
+@decorators.rate_limit()
+@decorators.private_chat_only()
+async def referral_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    bot_username = context.bot.username or ""
+    referral_code = f"ref{user_id}"
+    referral_link = (
+        f"https://t.me/{bot_username}?start={referral_code}" if bot_username else None
+    )
+    total_referrals = await db.get_referral_count(user_id)
+    earned_stars = total_referrals * 2
+    lines = [
+        "<b>🎁 Реферальная система</b>",
+        "",
+        "🎯 Поделитесь ссылкой и получайте бонусы.",
+        "Каждый приглашённый приносит вам 2⭐, а ему достаётся 1⭐.",
+    ]
+    if referral_link:
+        lines.append(f'🔗 Ваша ссылка: <a href="{referral_link}">{referral_link}</a>')
+    lines.extend(
+        [
+            f"🆔 Код: <code>{referral_code}</code>",
+            f"👥 Приглашено друзей: {total_referrals}",
+            f"💰 Вы заработали: {earned_stars}⭐",
+        ]
+    )
+    keyboard = []
+    if referral_link:
+        keyboard.append(
+            [InlineKeyboardButton("🔗 Поделиться ссылкой", url=referral_link)]
+        )
+    keyboard.append(
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="cabinet:menu")]
+    )
+    await update.message.reply_text(
+        "\n".join(lines),
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def personal_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1062,6 +1487,7 @@ async def personal_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@subscription_required
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1076,12 +1502,10 @@ async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if args[1].isdigit():
+        try:
             quantity = int(args[1])
-        else:
-            await update.message.reply_text(
-                "Количество должно быть целым числом больше 0."
-            )
+        except ValueError:
+            await update.message.reply_text("Количество должно быть числом.")
             return
 
         if quantity <= 0:

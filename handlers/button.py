@@ -1,8 +1,7 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-
-HINT_TEXT = {"easy": "🟢 Лёгкая", "hard": "🔴 Хард", "medium": "🟡 Медиум"}
-
-
+from telegram import ReplyKeyboardMarkup,InlineKeyboardMarkup,InlineKeyboardButton
+HINT_TEXT = {'easy':"🟢 Лёгкая",
+             'hard':"🔴 Хард",
+             'medium':"🟡 Медиум"}
 def get_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
@@ -60,4 +59,14 @@ def get_message_start(room_id: str, players: int, mode: str, count_word: int) ->
         f"Создатель комнаты может сменить режим командами /mode_clash и /mode_dota\n\n"
         f"Для начала игры нажмите '▶️ Начать игру'\n"
         f"По кнопке ниже вы можете ознакомиться с подсказками для игры🙂"
+    )
+
+
+def get_room_mode_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [["🎲 Дота 2", "🃏 Clash Royale", "🎮 Brawl Stars"],
+         ["🚪 Выйти из комнаты", "🏠 Главное меню"],
+         ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
     )

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from const import PROMPTS
+from const import PROMPTS, game_array
 from database.actions import db
 import requests
 import os

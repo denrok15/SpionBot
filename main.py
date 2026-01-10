@@ -15,11 +15,6 @@ from telegram.ext import (
 )
 
 from database.actions import db
-from handlers.callback import (
-    back_to_room_callback,
-    check_clue_callback,
-    show_clues_callback,
-)
 from handlers.commands import (
     buy_hint,
     buy_hint_cancel_callback,
@@ -39,6 +34,7 @@ from handlers.commands import (
     precheckout_callback,
     restart_game,
     rules,
+    set_mode_brawl,
     set_mode_clash,
     set_mode_dota,
     show_cards,
@@ -47,6 +43,13 @@ from handlers.commands import (
     start,
     start_game,
     successful_payment_callback,
+    single_mode,
+    single_mode_callback,
+)
+from handlers.callback import (
+    check_clue_callback,
+    show_clues_callback,
+    back_to_room_callback,
 )
 from utils.background import generate_clue, periodic_cleanup
 
@@ -76,9 +79,11 @@ async def main():
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         return
+
     asyncio.create_task(periodic_cleanup())
     asyncio.create_task(generate_clue())
     application = Application.builder().token(API_TOKEN).build()
+
     handlers = [
         CommandHandler("start", start),
         CommandHandler("create", create_room),
@@ -92,13 +97,18 @@ async def main():
         CommandHandler("cards", show_cards),
         CommandHandler("mode_clash", set_mode_clash),
         CommandHandler("mode_dota", set_mode_dota),
+        CommandHandler("mode_brawl", set_mode_brawl),
         CommandHandler("menu", start),
+        CommandHandler("single", single_mode),
         CommandHandler("stats", show_stats),
         CommandHandler("account", personal_account),
         CommandHandler("buy_hint", buy_hint),
     ]
     application.add_handler(
         CallbackQueryHandler(check_subscription_callback, pattern="check_subscription")
+    )
+    application.add_handler(
+        CallbackQueryHandler(single_mode_callback, pattern=r"^single:")
     )
     application.add_handler(
         CallbackQueryHandler(buy_hint_type_callback, pattern=r"^buy_type:")

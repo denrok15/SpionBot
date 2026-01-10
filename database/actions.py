@@ -1,5 +1,5 @@
 import logging
-from typing import List, Literal, Optional
+from typing import List, Optional, Literal
 
 import asyncpg
 
@@ -259,6 +259,32 @@ class ButtonCommand(CreateDB):
                 user_id,
             )
             return dict(row) if row else None
+
+    async def get_referrer(self, user_id: int) -> Optional[int]:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT inviter_id FROM referrals WHERE user_id = $1", user_id
+            )
+            return row["inviter_id"] if row else None
+
+    async def get_referral_count(self, inviter_id: int) -> int:
+        async with self.pool.acquire() as conn:
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM referrals WHERE inviter_id = $1", inviter_id
+            )
+            return count or 0
+
+    async def create_referral(self, user_id: int, inviter_id: int) -> bool:
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(
+                    "INSERT INTO referrals (user_id, inviter_id) VALUES ($1, $2)",
+                    user_id,
+                    inviter_id,
+                )
+                return True
+            except asyncpg.UniqueViolationError:
+                return False
 
     async def get_user_hint(
         self,
