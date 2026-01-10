@@ -5,8 +5,8 @@ import os
 import random
 import json
 load_dotenv()
-HOST = os.getenv("HOST")
-PORT = os.getenv("PORT")
+HOST = os.getenv("REDIS_HOST")
+PORT = os.getenv("REDIS_PORT")
 r = redis.Redis(
     host=HOST,
     port=PORT,

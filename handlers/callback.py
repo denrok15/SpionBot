@@ -109,8 +109,8 @@ async def check_clue_callback(
         )
         logger.info(f"У пользователя нет подсказок типа {clue_type}")
         return
-    clue = "Подсказка: " + get_clue_hero(word,mode)
-    await db.update_user_hint(user_id, clue_type)
+    clue = "Подсказка: " + get_clue_hero(word, clue_type)
+    await db.update_user_hint(user_id, hint_type)
     count_hints[clue_type] -= 1
     logger.info("Удалены подсказка у пользователя.")
     await query.edit_message_reply_markup(
