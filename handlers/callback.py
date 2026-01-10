@@ -17,8 +17,8 @@ from handlers.button import (
     get_inline_keyboard,
     get_message_start,
 )
+from database.redis import get_clue_hero
 from handlers.commands import HINT_QUANTITIES
-from utils.clue import clue_obj
 from utils.decorators import hint_guard
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 
@@ -90,7 +90,6 @@ async def check_clue_callback(
     if not room or not room.get("word"):
         await context.bot.send_message(chat_id=chat_id, text="Вы находитесь не в игры!")
         return
-
     logger.info("Получен герой из комнаты")
     mode = room.get("mode")
     game_key = mode.lower()
@@ -110,8 +109,8 @@ async def check_clue_callback(
         )
         logger.info(f"У пользователя нет подсказок типа {clue_type}")
         return
-    clue = clue_obj.found_clue(game_key, word, clue_type)
-    await db.update_user_hint(user_id, hint_type)
+    clue = "Подсказка: " + get_clue_hero(word,mode)
+    await db.update_user_hint(user_id, clue_type)
     count_hints[clue_type] -= 1
     logger.info("Удалены подсказка у пользователя.")
     await query.edit_message_reply_markup(
