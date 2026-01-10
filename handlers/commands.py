@@ -412,18 +412,16 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
 
     keyboard = get_room_mode_keyboard()
-
+    inline_keyboard = get_inline_keyboard()
     await update.message.reply_text(
-        f"✅ Комната создана!\n\n"
-        f"ID комнаты: <code>{room_id}</code>\n"
-        f"Отправьте этот ID другим игрокам\n\n"
-        f"👥 Игроков: 1/15\n"
-        f"🎴 Режим по умолчанию: {get_theme_name(DEFAULT_MODE)}\n"
-        f"⬇️ Выберите режим через кнопки снизу\n"
-        f"🔄 Для быстрой смены режима можно использовать команды\n"
-        f"/mode_clash, /mode_dota или /mode_brawl.",
+        "✅ Комната создана!\n\n",
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
+    )
+    await update.message.reply_text(
+        text=get_message_start(room_id, 1, get_theme_name(DEFAULT_MODE), len(words)),
+        parse_mode=ParseMode.HTML,
+        reply_markup=inline_keyboard,
     )
 
 
@@ -559,6 +557,17 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     spy = random.choice(players)
 
+    account = await db.get_user_account(user_id)
+
+    if not account:
+        easy = medium = hard = 0
+    else:
+        easy = account["easy_hints"]
+        medium = account["medium_hints"]
+        hard = account["hard_hints"]
+
+    keyboard_inline = get_game_inline_button(easy, medium, hard)
+
     await db.update_room_game_state(room_id, word, spy, card_url)
 
     for player_id in players:
@@ -575,6 +584,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                         chat_id=player_id,
                         photo=cached_file_id,
                         caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
+                        reply_markup=keyboard_inline,
                     )
 
                 else:
@@ -582,6 +592,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                         chat_id=player_id,
                         photo="https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png",
                         caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
+                        reply_markup=keyboard_inline,
                     )
 
                     if hasattr(result, "photo") and result.photo:
@@ -597,6 +608,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 await context.bot.send_message(
                     player_id,
                     f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}",
+                    reply_markup=keyboard_inline,
                 )
 
         else:
