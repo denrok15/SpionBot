@@ -2,7 +2,7 @@ import asyncio
 import logging
 from const import game_array
 from database.actions import db
-import requests
+from utils.clue import take_clue_serves
 import os
 from utils.clue import clue_obj
 
@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 URL_SERVICE = os.getenv("URL_SERVICE")
 HASH = os.getenv("HASH")
+
+
+
 
 
 async def periodic_cleanup() -> None:
@@ -29,11 +32,7 @@ async def generate_clue() -> None:
     await asyncio.sleep(5)
     while True:
         for game in game_array:
-            data = {
-                "password": HASH,
-                "game": game,
-            }
-            response = await asyncio.to_thread(requests.post, URL_SERVICE, json=data)
+            response = take_clue_serves(game)
             setattr(clue_obj, f"clue_{game}", response)
             logger.info(f"Generated clue for {game}: {response.text}")
         await asyncio.sleep(86400)

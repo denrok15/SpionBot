@@ -1,6 +1,23 @@
+import os
 import random
 from typing import Literal
+from dotenv import load_dotenv
+import requests
+load_dotenv()
 
+HASH = os.getenv("HASH")
+URL = os.getenv("URL_SERVICE")
+def take_clue_serves(game : str)->dict:
+    payload = {
+        "password": HASH,
+        "game": game
+    }
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json"
+}
+    response = requests.post(URL, json=payload, headers=headers)
+    return response.json()
 
 class UserClue:
     def __init__(self):
