@@ -66,4 +66,6 @@ class CreateDB:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+
 db_init = CreateDB()

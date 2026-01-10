@@ -52,8 +52,6 @@ DONATE_AMOUNTS = [5, 10, 20]
 
 
 async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
-
-
     keyboard = get_main_keyboard()
 
     room_id = await db.get_user_room(user_id)
@@ -78,6 +76,8 @@ async def show_main_menu(user_id: int, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
+
+
 async def check_subscription_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -110,7 +110,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await show_main_menu(user_id, context)
 
 
-
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -138,13 +137,15 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text(
         "✅ Комната создана!\n\n",
         parse_mode=ParseMode.HTML,
-        reply_markup = keyboard,
+        reply_markup=keyboard,
     )
-    await update.message.reply_text(text = get_message_start(room_id,1,get_theme_name(DEFAULT_MODE),len(words)),
+    await update.message.reply_text(
+        text=get_message_start(room_id, 1, get_theme_name(DEFAULT_MODE), len(words)),
         parse_mode=ParseMode.HTML,
         reply_markup=inline_keyboard,
     )
- 
+
+
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -210,14 +211,14 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_room_keyboard()
     inline_keyboard = get_inline_keyboard()
     await update.message.reply_text(
-        f"✅ Вы присоединились к комнате {room_id}!\n\n",reply_markup=keyboard)
-
+        f"✅ Вы присоединились к комнате {room_id}!\n\n", reply_markup=keyboard
+    )
 
     await update.message.reply_text(
         f"👥 Игроков: {len(players)}/15\n"
         f"Ожидайте начала игры...\n"
         f"По кнопке ниже вы можете ознакомиться с подсказками для игры🙂",
-        reply_markup=inline_keyboard
+        reply_markup=inline_keyboard,
     )
 
     creator_id = room["creator_id"]
@@ -232,7 +233,6 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @decorators.game_not_started()
- 
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
@@ -286,7 +286,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         easy = account["easy_hints"]
         medium = account["medium_hints"]
         hard = account["hard_hints"]
-    keyboard_inline = get_game_inline_button(easy,medium,hard)
+    keyboard_inline = get_game_inline_button(easy, medium, hard)
 
     await db.update_room_game_state(room_id, word, spy, card_url)
     for player_id in players:
@@ -297,20 +297,19 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
             )
             try:
-
                 if cached_file_id:
                     await context.bot.send_photo(
                         chat_id=player_id,
                         photo=cached_file_id,
                         caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Чтобы воспользоваться подсказками используй меню ниже",
-                        reply_markup=keyboard_inline
+                        reply_markup=keyboard_inline,
                     )
                 else:
                     result = await context.bot.send_photo(
                         chat_id=player_id,
                         photo="https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png",
                         caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Чтобы воспользоваться подсказками используй меню ниже",
-                        reply_markup=keyboard_inline
+                        reply_markup=keyboard_inline,
                     )
 
                     if hasattr(result, "photo") and result.photo:
@@ -325,7 +324,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 await context.bot.send_message(
                     player_id,
                     f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}",
-                    reply_markup=keyboard_inline
+                    reply_markup=keyboard_inline,
                 )
 
         else:
@@ -381,7 +380,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             pass
 
 
-
 @decorators.rate_limit()
 @decorators.creator_only()
 @decorators.room_lock()
@@ -411,8 +409,7 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_room_keyboard()
 
     await update.message.reply_text(
-        text =
-        f"🔄 Игра перезапущена!\n\n"
+        text=f"🔄 Игра перезапущена!\n\n"
         f"ID комнаты: <code>{room_id}</code>\n"
         f"👥 Игроков: {len(players)}\n"
         f"🎴 Режим: {get_theme_name(room['mode'])}\n"
@@ -433,7 +430,6 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             except:
                 pass
-
 
 
 @decorators.rate_limit()
@@ -523,7 +519,6 @@ async def get_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
-
 @decorators.rate_limit()
 async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -559,7 +554,6 @@ async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Статус: {status}{current_word}\n\n"
         f"{players_list}"
     )
-
 
 
 @decorators.rate_limit()
@@ -613,7 +607,6 @@ async def leave_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Вы вышли из комнаты!", reply_markup=keyboard)
 
 
-
 @decorators.rate_limit()
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_main_keyboard()
@@ -640,7 +633,7 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "2️⃣ Вопросы должны помогать определить, кто шпион\n"
         "3️⃣ Отвечать нужно честно, *не называя слово напрямую*\n\n"
         "🎯 *Цели*\n\n"
-         "• 🕶️ *Шпион*: понять, какое слово загадано\n"
+        "• 🕶️ *Шпион*: понять, какое слово загадано\n"
         "*: понять, какое слово загадано\n"
         "• 🧑‍🤝‍🧑 *Остальные игроки*: вычислить шпиона\n\n"
         f"🎴 *Тематика*: {theme_name}\n"
@@ -651,7 +644,6 @@ async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=keyboard,
     )
-
 
 
 @decorators.rate_limit()
@@ -711,7 +703,6 @@ async def show_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(response, reply_markup=keyboard)
 
 
-
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.creator_only()
@@ -750,7 +741,6 @@ async def set_mode_clash(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-
 @decorators.rate_limit()
 @decorators.private_chat_only()
 @decorators.creator_only()
@@ -787,7 +777,6 @@ async def set_mode_dota(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Режим изменён на {get_theme_name(MODE_DOTA)}.\n"
         f"Доступно героев: {len(words)}"
     )
-
 
 
 @decorators.rate_limit()
@@ -910,8 +899,7 @@ async def successful_payment_callback(
     new_balance = await db.add_balance(user_id, stars)
     balance_text = f"{new_balance}⭐" if new_balance is not None else "?"
     await update.message.reply_text(
-        f"Спасибо за поддержку! Вы пожертвовали {stars}⭐.\n"
-        f"💳 Баланс: {balance_text}"
+        f"Спасибо за поддержку! Вы пожертвовали {stars}⭐.\n💳 Баланс: {balance_text}"
     )
 
 
@@ -932,9 +920,7 @@ def _build_hint_selection_keyboard():
         ]
         for hint_type in ["easy", "medium", "hard"]
     ]
-    keyboard.append(
-        [InlineKeyboardButton("❌ Закрыть", callback_data="buy_cancel")]
-    )
+    keyboard.append([InlineKeyboardButton("❌ Закрыть", callback_data="buy_cancel")])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -948,9 +934,7 @@ def _build_quantity_keyboard(hint_type: str):
                 callback_data=f"buy_confirm:{hint_type}:{qty}",
             )
         )
-    buttons.append(
-        InlineKeyboardButton("⬅️ Назад", callback_data="buy_type:back")
-    )
+    buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="buy_type:back"))
     rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
     return InlineKeyboardMarkup(rows)
 
@@ -1002,6 +986,8 @@ def _personal_account_text(user, balance, hard, medium, easy):
         "💳 Чтобы пополнить баланс, используйте /donate\n"
         "🛒 Чтобы купить подсказки, воспользуйтесь меню ниже."
     )
+
+
 def _build_cabinet_keyboard():
     return InlineKeyboardMarkup(
         [
@@ -1015,21 +1001,17 @@ def _build_cabinet_keyboard():
                 InlineKeyboardButton(
                     "💳 Пополнить баланс", callback_data="cabinet:donate"
                 )
-            ]
+            ],
         ]
     )
 
 
 def _build_donate_keyboard():
     buttons = [
-        InlineKeyboardButton(
-            f"{amount} ⭐", callback_data=f"donate_amount:{amount}"
-        )
+        InlineKeyboardButton(f"{amount} ⭐", callback_data=f"donate_amount:{amount}")
         for amount in DONATE_AMOUNTS
     ]
-    buttons.append(
-        InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")
-    )
+    buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account"))
     rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
     return InlineKeyboardMarkup(rows)
 
@@ -1061,15 +1043,11 @@ async def _get_account_summary(user_id: int):
     )
 
 
-
- 
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def personal_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    balance, hard_count, medium_count, easy_count = await _get_account_summary(
-        user_id
-    )
+    balance, hard_count, medium_count, easy_count = await _get_account_summary(user_id)
 
     await update.message.reply_text(
         _personal_account_text(
@@ -1084,7 +1062,6 @@ async def personal_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
- 
 @decorators.rate_limit()
 @decorators.private_chat_only()
 async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1102,7 +1079,9 @@ async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if args[1].isdigit():
             quantity = int(args[1])
         else:
-            await update.message.reply_text("Количество должно быть целым числом больше 0.")
+            await update.message.reply_text(
+                "Количество должно быть целым числом больше 0."
+            )
             return
 
         if quantity <= 0:
@@ -1123,9 +1102,7 @@ async def buy_hint(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def buy_hint_type_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
+async def buy_hint_type_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
@@ -1161,9 +1138,7 @@ async def buy_hint_type_callback(
     )
 
 
-async def buy_hint_confirm_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
+async def buy_hint_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
@@ -1199,9 +1174,7 @@ async def buy_hint_confirm_callback(
     )
 
 
-async def buy_hint_cancel_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
+async def buy_hint_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
@@ -1209,9 +1182,7 @@ async def buy_hint_cancel_callback(
     await query.message.edit_text("❌ Покупка отменена.")
 
 
-async def cabinet_action_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
+async def cabinet_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
@@ -1236,24 +1207,21 @@ async def cabinet_action_callback(
 
     if action == "donate":
         await query.message.edit_text(
-            "💳 Выберите, сколько звезд хотите пополнить:", reply_markup=_build_donate_keyboard()
+            "💳 Выберите, сколько звезд хотите пополнить:",
+            reply_markup=_build_donate_keyboard(),
         )
         return
 
     if action == "account":
         balance, hard, medium, easy = await _get_account_summary(query.from_user.id)
         await query.message.edit_text(
-            _personal_account_text(
-                query.from_user, balance, hard, medium, easy
-            ),
+            _personal_account_text(query.from_user, balance, hard, medium, easy),
             parse_mode=ParseMode.HTML,
             reply_markup=_build_cabinet_keyboard(),
         )
 
 
-async def donate_amount_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
+async def donate_amount_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return

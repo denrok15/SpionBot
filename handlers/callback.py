@@ -17,7 +17,7 @@ from handlers.button import (
     get_inline_keyboard,
     get_message_start,
 )
-from handlers.commands import DONATE_AMOUNTS
+from handlers.commands import HINT_QUANTITIES
 from utils.clue import clue_obj
 from utils.decorators import hint_guard
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
@@ -25,6 +25,8 @@ from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODE = MODE_CLASH
+
+
 async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Сработал show_clues_callback")
     query = update.callback_query
@@ -35,16 +37,18 @@ async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"Подсказки помогут тебе быстрее понять, какой персонаж загадан!\n\n"
         f"Существует 3 вида подсказок:\n"
         f"1) Hard — абстрактный факт, который максимально обобщённо описывает персонажа "
-        f"(Цена: {DONATE_AMOUNTS[0]}✨)\n"
+        f"(Цена: {HINT_QUANTITIES[0]}✨)\n"
         f"2) Medium — факт, который поймут любители и профессионалы, но не многие новички "
-        f"(Цена: {DONATE_AMOUNTS[1]}✨)\n"
+        f"(Цена: {HINT_QUANTITIES[1]}✨)\n"
         f"3) Easy — факт, который будет понятен даже новичкам! "
-        f"(Цена: {DONATE_AMOUNTS[2]}✨)\n\n"
+        f"(Цена: {HINT_QUANTITIES[2]}✨)\n\n"
         f"Если у вас нет подсказок — их можно приобрести в в личном кабинете.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_room")]
-        ])
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_room")]]
+        ),
     )
+
+
 async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Сработал back_to_room_callback")
     query = update.callback_query
@@ -60,27 +64,31 @@ async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TY
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
     reply_keyboard = get_inline_keyboard()
     await query.message.edit_text(
-        text = get_message_start(room_id,1,get_theme_name(DEFAULT_MODE),len(words)),
-        parse_mode=ParseMode.HTML, reply_markup=reply_keyboard
+        text=get_message_start(room_id, 1, get_theme_name(DEFAULT_MODE), len(words)),
+        parse_mode=ParseMode.HTML,
+        reply_markup=reply_keyboard,
     )
+
+
 @hint_guard
-async def check_clue_callback(update: Update, context: ContextTypes.DEFAULT_TYPE,clue_type : str):
+async def check_clue_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, clue_type: str
+):
     query = update.callback_query
     await query.answer()
     chat_id = update.effective_chat.id
-
 
     hint_type = f"{clue_type}_hints"
     user_id = query.from_user.id
     room_id = await db.get_user_room(user_id)
     if not room_id:
-        await context.bot.send_message(chat_id=chat_id,text = "Вы находитесь не в игры!")
+        await context.bot.send_message(chat_id=chat_id, text="Вы находитесь не в игры!")
         return
 
     room = await db.get_room(room_id)
     word = room.get("word")
     if not room or not room.get("word"):
-        await context.bot.send_message(chat_id=chat_id,text = "Вы находитесь не в игры!")
+        await context.bot.send_message(chat_id=chat_id, text="Вы находитесь не в игры!")
         return
 
     logger.info("Получен герой из комнаты")
@@ -90,15 +98,25 @@ async def check_clue_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     if count is None:
         logger.info("Произошла ошибка взятия подсказок")
         return
-    count_hints = {"easy": count["easy_hints"], "medium": count["medium_hints"], "hard": count["hard_hints"]}
+    count_hints = {
+        "easy": count["easy_hints"],
+        "medium": count["medium_hints"],
+        "hard": count["hard_hints"],
+    }
     if count_hints[clue_type] <= 0:
-        await context.bot.send_message(chat_id=chat_id,text =
-            "У вас нет подсказок,для данного типа.Приобрести подсказку можно в личном кабинете")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="У вас нет подсказок,для данного типа.Приобрести подсказку можно в личном кабинете",
+        )
         logger.info(f"У пользователя нет подсказок типа {clue_type}")
         return
     clue = clue_obj.found_clue(game_key, word, clue_type)
     await db.update_user_hint(user_id, hint_type)
     count_hints[clue_type] -= 1
     logger.info("Удалены подсказка у пользователя.")
-    await query.edit_message_reply_markup(get_game_inline_button(count_hints["easy"],count_hints["medium"],count_hints["hard"]))
+    await query.edit_message_reply_markup(
+        get_game_inline_button(
+            count_hints["easy"], count_hints["medium"], count_hints["hard"]
+        )
+    )
     await context.bot.send_message(chat_id=chat_id, text=clue)

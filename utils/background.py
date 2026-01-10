@@ -1,12 +1,16 @@
 import asyncio
 import logging
-
-from const import PROMPTS, game_array
+from const import PROMPTS
 from database.actions import db
+import requests
+import os
 from utils.clue import clue_obj
-from utils.llm import ask_llm
 
 logger = logging.getLogger(__name__)
+
+URL_SERVICE = os.getenv("URL_SERVICE")
+HASH = os.getenv("HASH")
+
 
 async def periodic_cleanup() -> None:
     """Фоновая задача для очистки старых данных"""
@@ -22,17 +26,14 @@ async def periodic_cleanup() -> None:
 
 
 async def generate_clue() -> None:
-    await asyncio.sleep(1800)
+    await asyncio.sleep(5)
     while True:
         for game in PROMPTS:
-            for Heroname in game_array[game]:
-                try:
-                    result = ask_llm(
-                        PROMPTS[game].replace("{Heroname}", Heroname)
-                    )
-                    getattr(clue_obj, f"clue_{game}")[Heroname] = result[Heroname]
-                    logger.info(f"Generated clue: {result}")
-                except Exception as e:
-                    logger.error(f"Error in generate_clue: {e}")
-            logger.info(f"Подсказки для {game} обновлены")
-        await asyncio.sleep(1800)
+            data = {
+                "password": HASH,
+                "game": game,
+            }
+            response = await asyncio.to_thread(requests.post, URL_SERVICE, json=data)
+            setattr(clue_obj, f"clue_{game}", response)
+            logger.info(f"Generated clue for {game}: {response.text}")
+        await asyncio.sleep(86400)

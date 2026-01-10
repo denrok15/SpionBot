@@ -367,9 +367,13 @@ def subscription_required(func):
             await update.message.reply_text("❌ Произошла ошибка проверки подписки.")
 
     return wrapper
+
+
 def hint_guard(func):
     @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+    async def wrapper(
+        update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs
+    ):
         query = update.callback_query
         await query.answer()
         _, clue_type = query.data.split(":")
@@ -377,4 +381,5 @@ def hint_guard(func):
             logger.info("Неизвестный тип подсказки")
             return
         return await func(update, context, clue_type)
+
     return wrapper
