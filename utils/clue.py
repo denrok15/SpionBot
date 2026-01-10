@@ -23,18 +23,20 @@ class UserClue:
     def __init__(self):
         self.clue_dota2 = {}
         self.clue_clash_royale = {}
+        self.brawl_stars = {}
         self.clues = {
             "dota2": self.clue_dota2,
             "clash_royale": self.clue_clash_royale,
+            "brawl_stars": self.clue_brawl_stars
         }
 
     def found_clue(
         self,
-        game: Literal["dota2", "clash_royale"],
+        game: Literal["dota2", "clash_royale","brawl_stars"],
         hero: str,  # название героев нужно брать строго из CONST.PY
         complexity: Literal["easy", "medium", "hard"],
     ):
-        number = random.randint(0, 5)
+        number = random.randint(0, 9)
         return self.clues[game][hero][complexity][number]
 
 
