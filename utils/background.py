@@ -2,11 +2,12 @@ import asyncio
 import logging
 from const import game_array
 from database.actions import db
-from utils.clue import take_clue_serves
+from database.redis import set_clue_hero
 import os
-from utils.clue import clue_obj
 import requests
 logger = logging.getLogger(__name__)
+
+HASH = os.getenv("HASH")
 URL = os.getenv("URL")
 async def periodic_cleanup() -> None:
     """Фоновая задача для очистки старых данных"""
@@ -26,9 +27,8 @@ async def generate_clue() -> None:
     while True:
         for game in game_array:
             response = take_clue_serves(game)
-            setattr(clue_obj, f"clue_{game}", response)
-            logger.info(f"Generated clue for {game}")
-            logger.info(f"dota clue is {clue_obj.clue_dota2}")
+            for hero in response["result"]:
+                set_clue_hero(hero,response["result"][hero])
         await asyncio.sleep(86400)
 async def update_connect() -> None:
     while True:
@@ -38,3 +38,9 @@ async def update_connect() -> None:
         }
         response = requests.get(URL, headers=headers)
         await asyncio.sleep(60)
+def take_clue_serves(game: str) -> dict:
+    logger.info(f"Getting clue serves for {game}")
+    payload = {"password": HASH, "game": game}
+    headers = {"accept": "application/json", "Content-Type": "application/json"}
+    response = requests.post(URL, json=payload, headers=headers)
+    return response.json()
