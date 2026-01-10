@@ -28,7 +28,7 @@ async def generate_clue() -> None:
             response = take_clue_serves(game)
             setattr(clue_obj, f"clue_{game}", response)
             logger.info(f"Generated clue for {game}")
-            print(response)
+            logger.info(f"dota clue is {clue_obj.clue_dota2}")
         await asyncio.sleep(86400)
 async def update_connect() -> None:
     while True:
