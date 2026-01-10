@@ -3,11 +3,13 @@ import random
 from typing import Literal
 from dotenv import load_dotenv
 import requests
+import logging
 load_dotenv()
-
+logger = logging.getLogger(__name__)
 HASH = os.getenv("HASH")
 URL = os.getenv("URL")
 def take_clue_serves(game : str)->dict:
+    logger.info(f"Getting clue serves for {game}")
     payload = {
         "password": HASH,
         "game": game
@@ -17,6 +19,7 @@ def take_clue_serves(game : str)->dict:
         "Content-Type": "application/json"
 }
     response = requests.post(URL, json=payload, headers=headers)
+
     return response.json()
 
 class UserClue:
