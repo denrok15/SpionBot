@@ -73,4 +73,12 @@ class CreateDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS image_cache (
+                    url TEXT PRIMARY KEY,
+                    file_id TEXT NOT NULL,
+                    mode VARCHAR(20),
+                    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 db_init = CreateDB()
