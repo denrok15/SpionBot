@@ -199,7 +199,6 @@ class BotDecorators:
                             )
 
                     return
-
                 return await func(update, context, *args, **kwargs)
 
             return wrapper
@@ -339,8 +338,6 @@ class BotDecorators:
 
             return wrapper
 
-        return decorator
-
 
 room_locks = RoomLocks()
 rate_limiter = RateLimiter()
@@ -368,5 +365,21 @@ def subscription_required(func):
         except Exception as e:
             logger.error(f"Ошибка в subscription_required: {e}")
             await update.message.reply_text("❌ Произошла ошибка проверки подписки.")
+
+    return wrapper
+
+
+def hint_guard(func):
+    @wraps(func)
+    async def wrapper(
+        update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs
+    ):
+        query = update.callback_query
+        await query.answer()
+        _, clue_type = query.data.split(":")
+        if clue_type not in ("easy", "medium", "hard"):
+            logger.info("Неизвестный тип подсказки")
+            return
+        return await func(update, context, clue_type)
 
     return wrapper

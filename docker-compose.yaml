@@ -68,7 +68,15 @@ services:
     depends_on:
       - elasticsearch
     restart: unless-stopped
-
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
 volumes:
   postgres_data:
   esdata:
+  redis_data:

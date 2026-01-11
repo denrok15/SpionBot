@@ -46,7 +46,12 @@ from handlers.commands import (
     single_mode,
     single_mode_callback,
 )
-from utils.background import generate_clue, periodic_cleanup
+from handlers.callback import (
+    check_clue_callback,
+    show_clues_callback,
+    back_to_room_callback,
+)
+from utils.background import generate_clue, periodic_cleanup,update_connect
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -54,7 +59,6 @@ logging.basicConfig(
 nest_asyncio.apply()
 logger = logging.getLogger(__name__)
 load_dotenv()
-
 
 async def main():
     API_TOKEN = os.getenv("API_TOKEN")
@@ -76,10 +80,11 @@ async def main():
         return
 
     asyncio.create_task(periodic_cleanup())
-    #asyncio.create_task(generate_clue())
-
+    asyncio.create_task(generate_clue())
+    asyncio.create_task(update_connect())
+    print('123')
     application = Application.builder().token(API_TOKEN).build()
-
+    print('213')
     handlers = [
         CommandHandler("start", start),
         CommandHandler("create", create_room),
@@ -120,6 +125,15 @@ async def main():
     )
     application.add_handler(
         CallbackQueryHandler(donate_amount_callback, pattern=r"^donate_amount:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(check_clue_callback, pattern=r"^check_clue:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(show_clues_callback, pattern="show_clues")
+    )
+    application.add_handler(
+        CallbackQueryHandler(back_to_room_callback, pattern="back_to_room")
     )
     application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))

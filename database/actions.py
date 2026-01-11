@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 import asyncpg
 
@@ -286,6 +286,33 @@ class ButtonCommand(CreateDB):
             except asyncpg.UniqueViolationError:
                 return False
 
+    async def get_user_hint(
+        self,
+        user_id: int,
+        hint_type: Literal["easy_hints", "medium_hints", "hard_hints"],
+    ) -> int | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT {hint_type} FROM user_accounts WHERE user_id = $1",
+                user_id,
+            )
+            return row[hint_type] if row else None
+
+    async def update_user_hint(
+        self,
+        user_id: int,
+        hint_type: Literal["easy_hints", "medium_hints", "hard_hints"],
+    ) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.fetchrow(
+                f"""
+                UPDATE user_accounts
+                SET {hint_type} = {hint_type} - 1 
+                WHERE user_id = $1
+                """,
+                user_id,
+            )
+
     async def add_balance(self, user_id: int, amount: int) -> Optional[int]:
         if amount <= 0:
             return None
@@ -340,4 +367,6 @@ class ButtonCommand(CreateDB):
                     easy,
                 )
                 return dict(row) if row else None
+
+
 db = ButtonCommand(db_init.pool)
