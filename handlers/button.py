@@ -1,8 +1,6 @@
 from telegram import ReplyKeyboardMarkup,InlineKeyboardMarkup,InlineKeyboardButton
 from utils.gameMod import get_theme_name
-HINT_TEXT = {'easy':"🟢 Лёгкая",
-             'hard':"🔴 Хард",
-             'medium':"🟡 Медиум"}
+from const import HINT_TEXT,HINT_LABELS, HINT_PRICES,DONATE_AMOUNTS
 
 def get_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
@@ -84,3 +82,62 @@ def get_join_room_text(room_id,players,mode) -> str:
         f"👥 Игроков: {str(players)}/15\n"
         f"🎴 Режим: {mode}\n"
         f"🔥 Тыкни на подсказки и узнай как побеждать проще 🙂")
+def _build_cabinet_keyboard():
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🏠 Главное меню", callback_data="cabinet:menu"),
+                InlineKeyboardButton(
+                    "🛒 Купить подсказки", callback_data="cabinet:buy_hints"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "💳 Пополнить баланс", callback_data="cabinet:donate"
+                )
+            ],
+        ]
+    )
+
+def _build_hint_selection_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                f"{HINT_LABELS[hint_type]} — {HINT_PRICES[hint_type]} ⭐",
+                callback_data=f"buy_type:{hint_type}",
+            )
+        ]
+        for hint_type in ["easy", "medium", "hard"]
+    ]
+    keyboard.append(
+        [InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")]
+    )
+    return InlineKeyboardMarkup(keyboard)
+def _personal_account_text(user, balance, hard, medium, easy):
+    name = user.full_name or user.username or "Игрок"
+    return (
+        "<b>👤 Личный кабинет</b>\n\n"
+        f"🔸 Имя: <b>{name}</b>\n\n"
+        "📊 Статистика шпиона:\n"
+        f"⭐ Баланс: <b>{balance}</b> ⭐\n\n"
+        "📦 На счету подсказок:\n"
+        f"• {HINT_LABELS['hard']}: {hard} шт.\n"
+        f"• {HINT_LABELS['medium']}: {medium} шт.\n"
+        f"• {HINT_LABELS['easy']}: {easy} шт.\n\n"
+        "💳 Чтобы пополнить баланс, используйте /donate или меню ниже\n"
+        "🛒 Чтобы купить подсказки, воспользуйтесь меню ниже."
+)
+
+
+def _build_donate_keyboard():
+    buttons = [
+        InlineKeyboardButton(
+            f"{amount} ⭐", callback_data=f"donate_amount:{amount}"
+        )
+        for amount in DONATE_AMOUNTS
+    ]
+    buttons.append(
+        InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")
+    )
+    rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
+    return InlineKeyboardMarkup(rows)
