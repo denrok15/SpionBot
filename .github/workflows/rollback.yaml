@@ -1,0 +1,47 @@
+name: Prev-Curr Rollback
+on:
+  workflow_dispatch:
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rollback via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 51.250.99.137
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: 22
+          script: |
+            echo "🔄 Starting rollback deployment..."
+            
+            cd SpionBot
+            echo "📦 Stopping containers..."
+            docker compose down
+            
+            echo "↩️ Switching to previous version..."
+            cd ../version
+            
+            echo "🗑️ Removing current SpionBot..."
+            rm -rf ../SpionBot
+            
+            echo "📦 Restoring SpionBot from previous snapshot..."
+            cp -a SpionBot-prev ../SpionBot
+            
+            echo "♻️ Syncing current snapshot with previous..."
+            rm -rf SpionBot-curr
+            cp -a SpionBot-prev SpionBot-curr
+            
+            cd ../SpionBot
+            echo "🚀 Building and starting containers..."
+            docker compose up -d --build
+            
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f
+            
+            echo "📊 Checking container status..."
+            sleep 3
+            docker compose ps
+            
+            echo "✅ Rollback deployment completed successfully!"

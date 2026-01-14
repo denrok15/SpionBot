@@ -1,5 +1,4 @@
 name: Deploy to Yandex Cloud
-
 on:
   workflow_dispatch:
     inputs:
@@ -11,14 +10,12 @@ on:
         options:
           - 'false'
           - 'true'
-
 jobs:
   check-workflows:
     runs-on: ubuntu-latest
     outputs:
       can_deploy: ${{ steps.check.outputs.can_deploy }}
       running_workflows: ${{ steps.check.outputs.running_workflows }}
-
     steps:
     - name: Check for running workflows
       id: check
@@ -42,14 +39,14 @@ jobs:
           
           if (otherRuns.length > 0) {
             const workflowNames = otherRuns.map(run => run.name).join(', ');
-            console.log(`⚠️ Found ${otherRuns.length} other workflows in progress:`);
+            console.log(⚠️ Found ${otherRuns.length} other workflows in progress:);
             console.log(workflowNames);
             const forceDeploy = '${{ github.event.inputs.force_deploy }}' === 'true';
             
             if (!forceDeploy) {
               core.setOutput('can_deploy', 'false');
               core.setOutput('running_workflows', workflowNames);
-              core.setFailed(`Cannot deploy while other workflows are running: ${workflowNames}. Use force_deploy option to override.`);
+              core.setFailed(Cannot deploy while other workflows are running: ${workflowNames}. Use force_deploy option to override.);
               return;
             } else {
               console.log('⚠️ Force deploy enabled - proceeding despite running workflows');
@@ -92,6 +89,28 @@ jobs:
           
           echo "🔁 Pulling latest changes..."
           git pull origin main
+          
+          cd ..
+          echo "🗂️ Preparing version directories..."
+          echo "📁 Creating dir version..."
+          mkdir -p version
+          
+          cd version
+          echo "📁 Creating current/previous folders..."
+          mkdir -p SpionBot-curr
+          mkdir -p SpionBot-prev
+          
+          echo "♻️ Rotating versions (curr -> prev)..."
+          rm -rf SpionBot-prev
+          mv SpionBot-curr SpionBot-prev
+          
+          echo "📦 Creating fresh current snapshot..."
+          rm -rf SpionBot-curr
+          cp -a ../SpionBot SpionBot-curr
+          
+          echo "✅ Version snapshot updated!"
+          
+          cd ../SpionBot
           
           echo "🚀 Building and starting containers..."
           docker compose up -d --build
