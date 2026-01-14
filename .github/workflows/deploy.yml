@@ -39,7 +39,7 @@ jobs:
           
           if (otherRuns.length > 0) {
             const workflowNames = otherRuns.map(run => run.name).join(', ');
-            console.log(⚠️ Found ${otherRuns.length} other workflows in progress:);
+            console.log('⚠️ Found ${otherRuns.length} other workflows in progress:');
             console.log(workflowNames);
             const forceDeploy = '${{ github.event.inputs.force_deploy }}' === 'true';
             
