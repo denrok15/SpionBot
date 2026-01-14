@@ -51,8 +51,7 @@ from handlers.callback import (
     show_clues_callback,
     back_to_room_callback,
 )
-from utils.background import generate_clue, periodic_cleanup,update_connect
-
+from utils.background import generate_clue, periodic_cleanup,update_connect,cleanup_single_mode
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -80,11 +79,10 @@ async def main():
         return
 
     asyncio.create_task(periodic_cleanup())
-    asyncio.create_task(generate_clue())
+    #asyncio.create_task(generate_clue())
     asyncio.create_task(update_connect())
-    print('123')
+    asyncio.create_task(cleanup_single_mode())
     application = Application.builder().token(API_TOKEN).build()
-    print('213')
     handlers = [
         CommandHandler("start", start),
         CommandHandler("create", create_room),
