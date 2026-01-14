@@ -1,5 +1,6 @@
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass,field
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, Optional
@@ -38,7 +39,7 @@ from utils.decorators import (
 from handlers.button import get_inline_keyboard,get_game_inline_button,get_message_start
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 from utils.subscription import is_subscribed, subscribe_keyboard
-from const import MODE_SELECTION_LABELS,MODE_ENTITY_LABELS,HINT_PRICES,HINT_LABELS,HINT_QUANTITIES
+from const import MODE_SELECTION_LABELS,MODE_ENTITY_LABELS,HINT_PRICES,HINT_LABELS,HINT_QUANTITIES,ADMIN
 DEFAULT_MODE = MODE_CLASH
 
 decorators = create_decorators(db)
@@ -55,7 +56,7 @@ SINGLE_MODE_SPY_IMAGE_URL = (
     "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
 )
 
-
+TZ_MSK_PLUS_4 = timezone(timedelta(hours=7))
 @dataclass
 class SingleModeSession:
     chat_id: int
@@ -68,7 +69,7 @@ class SingleModeSession:
     mode: str
     revealed: bool = False
     back_card_file_id: Optional[str] = None
-
+    time: datetime = field(default_factory=lambda: datetime.now(TZ_MSK_PLUS_4))
 
 SINGLE_MODE_SESSIONS: Dict[int, SingleModeSession] = {}
 
@@ -78,7 +79,10 @@ async def show_main_menu(
     context: ContextTypes.DEFAULT_TYPE,
     notice: Optional[str] = None,
 ):
-    keyboard = get_main_keyboard()
+    if user_id in ADMIN:
+        keyboard = get_main_keyboard("😈Admin mode")
+    else:
+        keyboard = get_main_keyboard()
 
     room_id = await db.get_user_room(user_id)
     if room_id:
@@ -1223,6 +1227,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await leave_room(update, context)
 
         await start(update, context)
+    elif text == "😈Admin mode":
+        await admin_checl_log(update,context)
     elif text.isdigit() and len(text) == 4:
         context.args = [text]
         await join_room(update, context)
@@ -1626,4 +1632,30 @@ async def donate_amount_callback(
         return
 
     await _send_donate_invoice(query.message.chat_id, context, amount)
+    await query.message.edit_text(
+        f"🧾 Формирую счёт на {amount} ⭐. Проверьте чат.",
+        reply_markup=_build_cabinet_keyboard(),
+    )
+async def \
+        admin_checl_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in ADMIN:
+        print(SINGLE_MODE_SESSIONS)
+        parts = [f"⏱️Сеансов single мода на данный момент: {len(SINGLE_MODE_SESSIONS)}",' ']
+        for user in SINGLE_MODE_SESSIONS:
+            sess = SINGLE_MODE_SESSIONS[user]
+            word = sess.word
+            player_count = sess.player_count
+            time = sess.time.strftime("%H:%M:%S %Y-%m-%d")
+            parts.append(f"{user} | {word} | {player_count} | {time}")
+        result_single_mode = "\n".join(parts)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=result_single_mode,
+            parse_mode=ParseMode.HTML,
+        )
+
+
+
+
 

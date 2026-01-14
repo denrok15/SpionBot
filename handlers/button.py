@@ -2,13 +2,16 @@ from telegram import ReplyKeyboardMarkup,InlineKeyboardMarkup,InlineKeyboardButt
 from utils.gameMod import get_theme_name
 from const import HINT_TEXT,HINT_LABELS, HINT_PRICES,DONATE_AMOUNTS
 
-def get_main_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
+def get_main_keyboard(admin : str | None = None) -> ReplyKeyboardMarkup:
+    keyboard = [
             ["🎮 Создать комнату", "🔗 Присоединиться"],
             ["👤 Личный кабинет", "📖 Правила"],
             ["🃏 Сингл мод", "🎁 Реферальная система"],
-        ],
+        ]
+    if admin is not None:
+        keyboard.append(admin)
+    return ReplyKeyboardMarkup(
+        keyboard,
         resize_keyboard=True,
         one_time_keyboard=False,
     )

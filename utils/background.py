@@ -5,6 +5,7 @@ from database.actions import db
 from database.redis import set_clue_hero
 import os
 import requests
+from handlers.commands import SINGLE_MODE_SESSIONS
 logger = logging.getLogger(__name__)
 
 HASH = os.getenv("HASH")
@@ -20,6 +21,14 @@ async def periodic_cleanup() -> None:
         except Exception as e:
             logger.error(f"Error in periodic cleanup: {e}")
         await asyncio.sleep(1800)
+async def cleanup_single_mode() -> None:
+    """Фоновая задача для очистки комнат single mode"""
+    while True:
+        try:
+            SINGLE_MODE_SESSIONS.clear()
+        except Exception as e:
+            logger.error(f"Error in periodic cleanup: {e}")
+        await asyncio.sleep(14400)
 
 
 async def generate_clue() -> None:
