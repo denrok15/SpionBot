@@ -1,4 +1,4 @@
-name: Prev-Curr Rollback
+name: Rollback Production
 on:
   workflow_dispatch:
 jobs:
@@ -14,9 +14,16 @@ jobs:
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 22
           script: |
+            -set a
             echo "🔄 Starting rollback deployment..."
             
+            if [ ! -d ../version/SpionBot-prev ]; then
+              echo "❌ SpionBot-prev not found; aborting rollback."
+              exit 1
+            fi
+            
             cd SpionBot
+            
             echo "📦 Stopping containers..."
             docker compose down
             
@@ -45,3 +52,4 @@ jobs:
             docker compose ps
             
             echo "✅ Rollback deployment completed successfully!"
+            
