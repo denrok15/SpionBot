@@ -16,8 +16,9 @@ jobs:
   check-workflows:
     runs-on: ubuntu-latest
     outputs:
-      can_deploy: ${{ steps.c heck.outputs.can_deploy }}
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
       running_workflows: ${{ steps.check.outputs.running_workflows }}
+
     steps:
     - name: Check for running workflows
       id: check
@@ -62,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-workflows
     if: needs.check-workflows.outputs.can_deploy == 'true'
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -91,23 +92,6 @@ jobs:
           
           echo "🔁 Pulling latest changes..."
           git pull origin main
-
-          cd ../version
-          if [ -d SpionBot-curr ]; then
-            rm -rf SpionBot-prev
-            mv SpionBot-curr SpionBot-prev
-          else
-            echo "SpionBot-curr not found; skipping move to SpionBot-prev."
-          fi
-          if [ -d ../SpionBot ]; then
-            rm -rf SpionBot-curr
-            cp -a ../SpionBot SpionBot-curr
-          else
-            echo "SpionBot not found at ../SpionBot; aborting."
-            exit 1
-          fi
-
-          cd ../SpionBot
           
           echo "🚀 Building and starting containers..."
           docker compose up -d --build
