@@ -16,6 +16,9 @@ from handlers.button import (
     get_game_inline_button,
     get_inline_keyboard,
     get_message_start,
+    get_join_room_text,
+    get_restart_room_text
+
 )
 from database.redis import get_clue_hero
 from handlers.commands import HINT_QUANTITIES
@@ -26,10 +29,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODE = MODE_CLASH
 
-
 async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Сработал show_clues_callback")
     query = update.callback_query
+    data = query.data or ""
+    source = data.split(":")[1]
     await query.answer()
 
     await query.message.edit_text(
@@ -44,7 +48,7 @@ async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"(Цена: {HINT_QUANTITIES[2]}✨)\n\n"
         f"Если у вас нет подсказок — их можно приобрести в в личном кабинете.",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_room")]]
+            [[InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_room:{source}")]]
         ),
     )
 
@@ -52,6 +56,8 @@ async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Сработал back_to_room_callback")
     query = update.callback_query
+    data = query.data or ""
+    source = data.split(":")[1]
     await query.answer()
     user_id = query.from_user.id
     room_id = await db.get_user_room(user_id)
@@ -62,9 +68,15 @@ async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if not room:
         return None, None
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
-    reply_keyboard = get_inline_keyboard()
+    reply_keyboard = get_inline_keyboard(source)
+    players = await db.get_room_players(room_id)
+    call_text = {
+        'join_game':get_join_room_text(room_id,len(players),get_theme_name(DEFAULT_MODE)),
+        'start_game':get_message_start(room_id, len(players), get_theme_name(DEFAULT_MODE)),
+        'restart_game':get_restart_room_text(room_id, players, room),
+    }
     await query.message.edit_text(
-        text=get_message_start(room_id, 1, get_theme_name(DEFAULT_MODE), len(words)),
+        text=call_text[source],
         parse_mode=ParseMode.HTML,
         reply_markup=reply_keyboard,
     )

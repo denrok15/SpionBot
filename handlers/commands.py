@@ -22,6 +22,12 @@ from handlers.button import (
     get_main_keyboard,
     get_room_keyboard,
     get_room_mode_keyboard,
+    get_restart_room_text,
+    get_join_room_text,
+    _build_cabinet_keyboard,
+    _build_hint_selection_keyboard,
+    _personal_account_text,
+    _build_donate_keyboard
 )
 from utils.decorators import (
     create_decorators,
@@ -32,37 +38,12 @@ from utils.decorators import (
 from handlers.button import get_inline_keyboard,get_game_inline_button,get_message_start
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 from utils.subscription import is_subscribed, subscribe_keyboard
+from const import MODE_SELECTION_LABELS,MODE_ENTITY_LABELS,HINT_PRICES,HINT_LABELS,HINT_QUANTITIES
 DEFAULT_MODE = MODE_CLASH
-
-MODE_SELECTION_LABELS = {
-    "🎲 Дота 2": MODE_DOTA,
-    "🃏 Clash Royale": MODE_CLASH,
-    "🎮 Brawl Stars": MODE_BRAWL,
-}
-
-MODE_ENTITY_LABELS = {
-    MODE_CLASH: "карт",
-    MODE_DOTA: "героев",
-    MODE_BRAWL: "бойцов",
-}
 
 decorators = create_decorators(db)
 
-HINT_PRICES = {
-    "hard": 1,
-    "medium": 2,
-    "easy": 3,
-}
 
-HINT_LABELS = {
-    "hard": "Хард",
-    "medium": "Медиум",
-    "easy": "Легкая",
-}
-
-HINT_QUANTITIES = [1, 2, 3]
-
-DONATE_AMOUNTS = [5, 10, 20]
 
 SINGLE_MODE_PLACEHOLDER_URL = (
     "https://via.placeholder.com/512x512.png?text=Spy+Mode"
@@ -413,14 +394,14 @@ async def create_room(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
 
     keyboard = get_room_mode_keyboard()
-    inline_keyboard = get_inline_keyboard()
+    inline_keyboard = get_inline_keyboard('start_game')
     await update.message.reply_text(
         "✅ Комната создана!\n\n",
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
     await update.message.reply_text(
-        text=get_message_start(room_id, 1, get_theme_name(DEFAULT_MODE), len(words)),
+        text=get_message_start(room_id, 1, get_theme_name(DEFAULT_MODE)),
         parse_mode=ParseMode.HTML,
         reply_markup=inline_keyboard,
     )
@@ -488,14 +469,17 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     players = await db.get_room_players(room_id)
-
+    inline_keyboard = get_inline_keyboard('join_game')
     keyboard = get_room_keyboard()
-
     await update.message.reply_text(
-        f"✅ Вы присоединились к комнате {room_id}!\n\n"
-        f"👥 Игроков: {len(players)}/15\n"
-        f"Ожидайте начала игры...",
-        reply_markup=keyboard,
+        text = f"✅ Вы присоединились к комнате {room_id}!\n\n",
+        parse_mode=ParseMode.HTML,
+        reply_markup=keyboard
+    )
+    await update.message.reply_text(
+        text = get_join_room_text(room_id,len(players),get_theme_name(DEFAULT_MODE)),
+        parse_mode=ParseMode.HTML,
+        reply_markup=inline_keyboard,
     )
 
     creator_id = room["creator_id"]
@@ -694,17 +678,12 @@ async def restart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     words, _ = get_words_and_cards_by_mode(room["mode"])
 
-    keyboard = get_room_keyboard()
+    inline_keyboard = get_inline_keyboard('restart_game')
 
     await update.message.reply_text(
-        f"🔄 Игра перезапущена!\n\n"
-        f"ID комнаты: <code>{room_id}</code>\n"
-        f"👥 Игроков: {len(players)}\n"
-        f"🎴 Режим: {get_theme_name(room['mode'])}\n"
-        f"🎱 Используй для смены режимы \n /mode_clash /mode_dota /mode_brawl \n"
-        f"Для начала новой игры нажмите '▶️ Начать игру'",
+        get_restart_room_text(room_id,players,room),
         parse_mode=ParseMode.HTML,
-        reply_markup=keyboard,
+        reply_markup=inline_keyboard,
     )
 
     for player_id in players:
@@ -1284,7 +1263,7 @@ async def successful_payment_callback(
     """
     payment = update.message.successful_payment
     user_id = update.effective_user.id
-    stars = max(1, payment.total_amount // 100)
+    stars = payment.total_amount
     new_balance = await db.add_balance(user_id, stars)
     balance_text = f"{new_balance}⭐" if new_balance is not None else "?"
     await update.message.reply_text(
@@ -1298,23 +1277,6 @@ def _format_price_list():
     return "\n".join(
         f"• {HINT_LABELS[item]}: {HINT_PRICES[item]} ⭐" for item in ordered
     )
-
-
-def _build_hint_selection_keyboard():
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                f"{HINT_LABELS[hint_type]} — {HINT_PRICES[hint_type]} ⭐",
-                callback_data=f"buy_type:{hint_type}",
-            )
-        ]
-        for hint_type in ["easy", "medium", "hard"]
-    ]
-    keyboard.append(
-        [InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")]
-    )
-    return InlineKeyboardMarkup(keyboard)
-
 
 def _build_quantity_keyboard(hint_type: str):
     buttons = []
@@ -1361,58 +1323,6 @@ async def _process_hint_purchase(user_id: int, hint_type: str, quantity: int):
         f"• {HINT_LABELS['easy']}: {result['easy_hints']} шт."
     )
     return True, message
-
-
-def _personal_account_text(user, balance, hard, medium, easy):
-    name = user.full_name or user.username or "Игрок"
-    return (
-        "<b>👤 Личный кабинет</b>\n\n"
-        f"🔸 Имя: <b>{name}</b>\n\n"
-        "📊 Статистика шпиона:\n"
-        "• Миссий завершено: 42\n"
-        "• Лучший результат: 7/8\n"
-        "• Средний рейтинг: A➤B\n\n"
-        f"⭐ Баланс: <b>{balance}</b> ⭐\n\n"
-        "📦 На счету подсказок:\n"
-        f"• {HINT_LABELS['hard']}: {hard} шт.\n"
-        f"• {HINT_LABELS['medium']}: {medium} шт.\n"
-        f"• {HINT_LABELS['easy']}: {easy} шт.\n\n"
-        "💳 Чтобы пополнить баланс, используйте /donate или меню ниже\n"
-        "🛒 Чтобы купить подсказки, воспользуйтесь меню ниже."
-    )
-
-
-def _build_cabinet_keyboard():
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("🏠 Главное меню", callback_data="cabinet:menu"),
-                InlineKeyboardButton(
-                    "🛒 Купить подсказки", callback_data="cabinet:buy_hints"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "💳 Пополнить баланс", callback_data="cabinet:donate"
-                )
-            ],
-        ]
-    )
-
-
-def _build_donate_keyboard():
-    buttons = [
-        InlineKeyboardButton(
-            f"{amount} ⭐", callback_data=f"donate_amount:{amount}"
-        )
-        for amount in DONATE_AMOUNTS
-    ]
-    buttons.append(
-        InlineKeyboardButton("⬅️ Назад", callback_data="cabinet:account")
-    )
-    rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
-    return InlineKeyboardMarkup(rows)
-
 
 async def _send_donate_invoice(
     chat_id: int, context: ContextTypes.DEFAULT_TYPE, amount: int

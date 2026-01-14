@@ -18,7 +18,7 @@ jobs:
     outputs:
       can_deploy: ${{ steps.check.outputs.can_deploy }}
       running_workflows: ${{ steps.check.outputs.running_workflows }}
-    
+
     steps:
     - name: Check for running workflows
       id: check
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-workflows
     if: needs.check-workflows.outputs.can_deploy == 'true'
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
