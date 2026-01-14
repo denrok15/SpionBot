@@ -1175,6 +1175,18 @@ async def single_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+    if context.user_data.get("awaiting_custom_donate_amount"):
+        amount_text = text.strip()
+        if amount_text.isdigit():
+            amount = int(amount_text)
+            if amount <= 0:
+                await update.message.reply_text("Сумма должна быть больше нуля.")
+                return
+            context.user_data.pop("awaiting_custom_donate_amount", None)
+            await _send_donate_invoice(update.effective_chat.id, context, amount)
+        else:
+            await update.message.reply_text("Введите сумму числом.")
+        return
     # user_id = update.effective_user.id не используется в функции
 
     if text == "🎮 Создать комнату":
@@ -1595,6 +1607,15 @@ async def donate_amount_callback(
     if len(parts) != 2:
         return
     _, amount_str = parts
+    amount_str = amount_str.strip()
+    if not amount_str.isdigit():
+        context.user_data["awaiting_custom_donate_amount"] = True
+        await query.message.edit_text(
+            "Введите свою сумму пополнения числом.",
+            reply_markup=_build_cabinet_keyboard(),
+        )
+        return
+    context.user_data.pop("awaiting_custom_donate_amount", None)
     try:
         amount = int(amount_str)
     except ValueError:
@@ -1605,7 +1626,4 @@ async def donate_amount_callback(
         return
 
     await _send_donate_invoice(query.message.chat_id, context, amount)
-    await query.message.edit_text(
-        f"🧾 Формирую счёт на {amount} ⭐. Проверьте чат.",
-        reply_markup=_build_cabinet_keyboard(),
-    )
+
