@@ -11,6 +11,7 @@ class ImageCache:
         self.db_pool = db_pool
         self.memory_cache: Dict[str, str] = {}
         self.session: Optional[aiohttp.ClientSession] = None
+        
 
     async def get_cached_image_id(self, url: str, mode: str) -> Optional[str]:
         """Получение file_id изображения из кэша"""
