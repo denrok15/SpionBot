@@ -80,7 +80,7 @@ async def main():
         return
 
     asyncio.create_task(periodic_cleanup())
-    #asyncio.create_task(generate_clue())
+    asyncio.create_task(generate_clue())
     asyncio.create_task(update_connect())
     asyncio.create_task(cleanup_single_mode())
     application = Application.builder().token(API_TOKEN).build()

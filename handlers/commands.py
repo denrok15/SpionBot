@@ -573,7 +573,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     spy = random.choice(players)
 
-    account = await db.get_user_account(user_id)
+    account = await db.get_user_account(spy)
 
     if not account:
         easy = medium = hard = 0
