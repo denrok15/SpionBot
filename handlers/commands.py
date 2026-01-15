@@ -1,4 +1,5 @@
 import random
+import asyncio
 from dataclasses import dataclass,field
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
@@ -21,6 +22,7 @@ from const import MODE_BRAWL, MODE_CLASH, MODE_DOTA
 from database.actions import db
 from handlers.button import (
     get_main_keyboard,
+    get_admin_panel_keyboard,
     get_room_keyboard,
     get_room_mode_keyboard,
     get_restart_room_text,
@@ -51,6 +53,9 @@ SINGLE_MODE_PLACEHOLDER_URL = (
 )
 BACK_CARD_PATH = Path("static/backCard.png")
 BACK_CARD_BYTES = BACK_CARD_PATH.read_bytes() if BACK_CARD_PATH.exists() else None
+SPY_CARD_PATH = Path("static/SpionCard.png")
+SPY_CARD_BYTES = SPY_CARD_PATH.read_bytes() if SPY_CARD_PATH.exists() else None
+SPY_CARD_CACHE_KEY = f"static:{SPY_CARD_PATH.as_posix()}"
 SINGLE_MODE_PLAYER_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 SINGLE_MODE_SPY_IMAGE_URL = (
     "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
@@ -69,6 +74,7 @@ class SingleModeSession:
     mode: str
     revealed: bool = False
     back_card_file_id: Optional[str] = None
+    spy_card_file_id: Optional[str] = None
     time: datetime = field(default_factory=lambda: datetime.now(TZ_MSK_PLUS_4))
 
 SINGLE_MODE_SESSIONS: Dict[int, SingleModeSession] = {}
@@ -80,7 +86,7 @@ async def show_main_menu(
     notice: Optional[str] = None,
 ):
     if user_id in ADMIN:
-        keyboard = get_main_keyboard("😈Admin mode")
+        keyboard = get_main_keyboard("😈 Админ Панель")
     else:
         keyboard = get_main_keyboard()
 
@@ -262,6 +268,10 @@ def _get_single_mode_photo(session: SingleModeSession):
     is_spy = session.current_index == session.spy_index
     if session.revealed:
         if is_spy:
+            if session.spy_card_file_id:
+                return session.spy_card_file_id
+            if SPY_CARD_BYTES:
+                return InputFile(BytesIO(SPY_CARD_BYTES), filename=SPY_CARD_PATH.name)
             return SINGLE_MODE_SPY_IMAGE_URL
         return session.card_url or SINGLE_MODE_PLACEHOLDER_URL
     if session.back_card_file_id:
@@ -293,6 +303,14 @@ async def _send_single_mode_card(
         )
     if not session.back_card_file_id and hasattr(message, "photo") and message.photo:
         session.back_card_file_id = message.photo[-1].file_id
+    if (
+        session.revealed
+        and session.current_index == session.spy_index
+        and not session.spy_card_file_id
+        and hasattr(message, "photo")
+        and message.photo
+    ):
+        session.spy_card_file_id = message.photo[-1].file_id
     return message
 
 
@@ -306,7 +324,15 @@ async def _update_single_mode_message(
     keyboard = _build_single_mode_keyboard(session)
     media = InputMediaPhoto(media=photo_source, caption=caption, parse_mode=ParseMode.HTML)
     try:
-        await query.edit_message_media(media=media, reply_markup=keyboard)
+        result = await query.edit_message_media(media=media, reply_markup=keyboard)
+        if (
+            session.revealed
+            and session.current_index == session.spy_index
+            and not session.spy_card_file_id
+            and hasattr(result, "photo")
+            and result.photo
+        ):
+            session.spy_card_file_id = result.photo[-1].file_id
     except BadRequest:
         try:
             await query.message.edit_caption(
@@ -357,6 +383,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "❗ Чтобы играть, подпишись на канал:", reply_markup=subscribe_keyboard()
         )
         return
+    await db.ensure_user_account(user_id)
     await show_main_menu(user_id, context, notice=referral_notice)
 
 
@@ -563,9 +590,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         if player_id == spy:
             await db.update_player_role(player_id, room_id, "шпион")
 
-            cached_file_id = await db.get_cached_image(
-                "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
-            )
+            cached_file_id = await db.get_cached_image(SPY_CARD_CACHE_KEY)
 
             try:
                 if cached_file_id:
@@ -576,20 +601,29 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                         reply_markup=keyboard_inline,
                     )
 
-                else:
+                elif SPY_CARD_BYTES:
                     result = await context.bot.send_photo(
                         chat_id=player_id,
-                        photo="https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png",
+                        photo=InputFile(
+                            BytesIO(SPY_CARD_BYTES), filename=SPY_CARD_PATH.name
+                        ),
                         caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
                         reply_markup=keyboard_inline,
                     )
 
                     if hasattr(result, "photo") and result.photo:
                         await db.cache_image(
-                            "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png",
+                            SPY_CARD_CACHE_KEY,
                             result.photo[-1].file_id,
                             mode,
                         )
+                else:
+                    await context.bot.send_photo(
+                        chat_id=player_id,
+                        photo=SINGLE_MODE_SPY_IMAGE_URL,
+                        caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n🎯 Ваша задача - понять слово.\n👥 Игроков: {len(players)}\n\n💡 Подсказка: это объект из {get_theme_name(mode)}",
+                        reply_markup=keyboard_inline,
+                    )
 
             except Exception as e:
                 logger.error(f"Error sending spy photo: {e}")
@@ -733,9 +767,7 @@ async def get_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if player_data["role"] == "шпион":
         try:
-            cached_file_id = await db.get_cached_image(
-                "https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png"
-            )
+            cached_file_id = await db.get_cached_image(SPY_CARD_CACHE_KEY)
 
             if cached_file_id:
                 await context.bot.send_photo(
@@ -744,10 +776,24 @@ async def get_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n👥 Игроков: {len(await db.get_room_players(room_id))}",
                 )
 
+            elif SPY_CARD_BYTES:
+                result = await context.bot.send_photo(
+                    chat_id=user_id,
+                    photo=InputFile(BytesIO(SPY_CARD_BYTES), filename=SPY_CARD_PATH.name),
+                    caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n👥 Игроков: {len(await db.get_room_players(room_id))}",
+                )
+                if hasattr(result, "photo") and result.photo:
+                    room = await db.get_room(room_id)
+                    mode = (room or {}).get("mode", DEFAULT_MODE)
+                    await db.cache_image(
+                        SPY_CARD_CACHE_KEY,
+                        result.photo[-1].file_id,
+                        mode,
+                    )
             else:
                 await context.bot.send_photo(
                     chat_id=user_id,
-                    photo="https://i.pinimg.com/originals/41/15/70/4115707ee950d4b0aba69664f7986ae5.png",
+                    photo=SINGLE_MODE_SPY_IMAGE_URL,
                     caption=f"🎭 Вы - ШПИОН!\n\n❌ Вы не знаете слово!\n👥 Игроков: {len(await db.get_room_players(room_id))}",
                 )
 
@@ -1063,7 +1109,9 @@ async def set_mode_brawl(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @decorators.rate_limit()
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Команда доступна только админам.")
+        return
     room_id = await db.get_user_room(user_id)
 
     if room_id:
@@ -1089,6 +1137,88 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏠 Всего комнат: {stats['total_rooms']}\n"
         f"🎮 Активных игр: {stats['active_rooms']}\n"
         f"👤 Всего игроков: {stats['total_players']}"
+    )
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+    await update.message.reply_text(
+        "<b>🔧 Админ панель</b>\n\nВыберите действие:",
+        reply_markup=get_admin_panel_keyboard(),
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def admin_single_mode_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+    parts = [
+        f"⏱️ Сеансов single мода сейчас: {len(SINGLE_MODE_SESSIONS)}",
+        "",
+    ]
+    for session_user_id, sess in SINGLE_MODE_SESSIONS.items():
+        time_str = sess.time.strftime("%H:%M:%S %Y-%m-%d")
+        parts.append(
+            f"{session_user_id} | {sess.word} | {sess.player_count} | {time_str}"
+        )
+    await context.bot.send_message(
+        chat_id=user_id,
+        text="\n".join(parts),
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def admin_global_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+    stats = await db.get_all_rooms_stats()
+    await update.message.reply_text(
+        f"📊 Общая статистика бота:\n\n"
+        f"🏠 Всего комнат: {stats['total_rooms']}\n"
+        f"🎮 Активных игр: {stats['active_rooms']}\n"
+        f"👤 Всего игроков: {stats['total_players']}"
+    )
+
+
+async def admin_broadcast_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+
+    status_msg = await update.message.reply_text("⏳ Запускаю рассылку...")
+    user_ids = await db.get_all_known_user_ids()
+
+    text = (
+        "<b>📢 SpionGame — наш канал</b>\n\n"
+        "Тут выходят обновы бота и анонсы.\n"
+        "Также иногда можно поиграть вместе с админами.\n\n"
+        "Нажми кнопку ниже и подпишись, чтобы не пропускать 🔥"
+    )
+    sent = 0
+    failed = 0
+    for idx, recipient_id in enumerate(user_ids, start=1):
+        try:
+            await context.bot.send_message(
+                chat_id=recipient_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=subscribe_keyboard(),
+            )
+            sent += 1
+        except Exception:
+            failed += 1
+        if idx % 25 == 0:
+            await asyncio.sleep(0.2)
+
+    await status_msg.edit_text(
+        f"✅ Рассылка завершена.\nОтправлено: {sent}\nОшибок: {failed}"
     )
 
 
@@ -1227,8 +1357,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await leave_room(update, context)
 
         await start(update, context)
-    elif text == "😈Admin mode":
-        await admin_checl_log(update,context)
+    elif text == "😈 Админ Панель":
+        await admin_panel(update, context)
+    elif text == "📊 Стата сингл мода":
+        await admin_single_mode_stats(update, context)
+    elif text == "📈 Общая стата":
+        await admin_global_stats(update, context)
+    elif text == "📢 Запустить рассылку":
+        await admin_broadcast_subscribe(update, context)
+    elif text == "⬅️ Назад":
+        user_id = update.effective_user.id
+        if user_id in ADMIN:
+            await show_main_menu(user_id, context)
+        else:
+            await update.message.reply_text("Используйте кнопки меню или команды.")
     elif text.isdigit() and len(text) == 4:
         context.args = [text]
         await join_room(update, context)
@@ -1636,26 +1778,3 @@ async def donate_amount_callback(
         f"🧾 Формирую счёт на {amount} ⭐. Проверьте чат.",
         reply_markup=_build_cabinet_keyboard(),
     )
-async def \
-        admin_checl_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id in ADMIN:
-        print(SINGLE_MODE_SESSIONS)
-        parts = [f"⏱️Сеансов single мода на данный момент: {len(SINGLE_MODE_SESSIONS)}",' ']
-        for user in SINGLE_MODE_SESSIONS:
-            sess = SINGLE_MODE_SESSIONS[user]
-            word = sess.word
-            player_count = sess.player_count
-            time = sess.time.strftime("%H:%M:%S %Y-%m-%d")
-            parts.append(f"{user} | {word} | {player_count} | {time}")
-        result_single_mode = "\n".join(parts)
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=result_single_mode,
-            parse_mode=ParseMode.HTML,
-        )
-
-
-
-
-

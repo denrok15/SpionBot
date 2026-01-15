@@ -14,6 +14,8 @@ from telegram.ext import (
     filters,
 )
 
+load_dotenv()
+
 from database.actions import db
 from handlers.commands import (
     buy_hint,
@@ -57,7 +59,6 @@ logging.basicConfig(
 )
 nest_asyncio.apply()
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 async def main():
     API_TOKEN = os.getenv("API_TOKEN")
