@@ -1,4 +1,5 @@
 import random
+import asyncio
 from dataclasses import dataclass,field
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
@@ -21,6 +22,7 @@ from const import MODE_BRAWL, MODE_CLASH, MODE_DOTA
 from database.actions import db
 from handlers.button import (
     get_main_keyboard,
+    get_admin_panel_keyboard,
     get_room_keyboard,
     get_room_mode_keyboard,
     get_restart_room_text,
@@ -80,7 +82,7 @@ async def show_main_menu(
     notice: Optional[str] = None,
 ):
     if user_id in ADMIN:
-        keyboard = get_main_keyboard("😈Admin mode")
+        keyboard = get_main_keyboard("😈 Админ Панель")
     else:
         keyboard = get_main_keyboard()
 
@@ -357,6 +359,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "❗ Чтобы играть, подпишись на канал:", reply_markup=subscribe_keyboard()
         )
         return
+    await db.ensure_user_account(user_id)
     await show_main_menu(user_id, context, notice=referral_notice)
 
 
@@ -1063,7 +1066,9 @@ async def set_mode_brawl(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @decorators.rate_limit()
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Команда доступна только админам.")
+        return
     room_id = await db.get_user_room(user_id)
 
     if room_id:
@@ -1089,6 +1094,88 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏠 Всего комнат: {stats['total_rooms']}\n"
         f"🎮 Активных игр: {stats['active_rooms']}\n"
         f"👤 Всего игроков: {stats['total_players']}"
+    )
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+    await update.message.reply_text(
+        "<b>🔧 Админ панель</b>\n\nВыберите действие:",
+        reply_markup=get_admin_panel_keyboard(),
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def admin_single_mode_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+    parts = [
+        f"⏱️ Сеансов single мода сейчас: {len(SINGLE_MODE_SESSIONS)}",
+        "",
+    ]
+    for session_user_id, sess in SINGLE_MODE_SESSIONS.items():
+        time_str = sess.time.strftime("%H:%M:%S %Y-%m-%d")
+        parts.append(
+            f"{session_user_id} | {sess.word} | {sess.player_count} | {time_str}"
+        )
+    await context.bot.send_message(
+        chat_id=user_id,
+        text="\n".join(parts),
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def admin_global_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+    stats = await db.get_all_rooms_stats()
+    await update.message.reply_text(
+        f"📊 Общая статистика бота:\n\n"
+        f"🏠 Всего комнат: {stats['total_rooms']}\n"
+        f"🎮 Активных игр: {stats['active_rooms']}\n"
+        f"👤 Всего игроков: {stats['total_players']}"
+    )
+
+
+async def admin_broadcast_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN:
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+
+    status_msg = await update.message.reply_text("⏳ Запускаю рассылку...")
+    user_ids = await db.get_all_known_user_ids()
+
+    text = (
+        "<b>📢 SpionGame — наш канал</b>\n\n"
+        "Тут выходят обновы бота и анонсы.\n"
+        "Также иногда можно поиграть вместе с админами.\n\n"
+        "Нажми кнопку ниже и подпишись, чтобы не пропускать 🔥"
+    )
+    sent = 0
+    failed = 0
+    for idx, recipient_id in enumerate(user_ids, start=1):
+        try:
+            await context.bot.send_message(
+                chat_id=recipient_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=subscribe_keyboard(),
+            )
+            sent += 1
+        except Exception:
+            failed += 1
+        if idx % 25 == 0:
+            await asyncio.sleep(0.2)
+
+    await status_msg.edit_text(
+        f"✅ Рассылка завершена.\nОтправлено: {sent}\nОшибок: {failed}"
     )
 
 
@@ -1227,8 +1314,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await leave_room(update, context)
 
         await start(update, context)
-    elif text == "😈Admin mode":
-        await admin_checl_log(update,context)
+    elif text == "😈 Админ Панель":
+        await admin_panel(update, context)
+    elif text == "📊 Стата сингл мода":
+        await admin_single_mode_stats(update, context)
+    elif text == "📈 Общая стата":
+        await admin_global_stats(update, context)
+    elif text == "📢 Запустить рассылку":
+        await admin_broadcast_subscribe(update, context)
+    elif text == "⬅️ Назад":
+        user_id = update.effective_user.id
+        if user_id in ADMIN:
+            await show_main_menu(user_id, context)
+        else:
+            await update.message.reply_text("Используйте кнопки меню или команды.")
     elif text.isdigit() and len(text) == 4:
         context.args = [text]
         await join_room(update, context)
@@ -1636,26 +1735,3 @@ async def donate_amount_callback(
         f"🧾 Формирую счёт на {amount} ⭐. Проверьте чат.",
         reply_markup=_build_cabinet_keyboard(),
     )
-async def \
-        admin_checl_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id in ADMIN:
-        print(SINGLE_MODE_SESSIONS)
-        parts = [f"⏱️Сеансов single мода на данный момент: {len(SINGLE_MODE_SESSIONS)}",' ']
-        for user in SINGLE_MODE_SESSIONS:
-            sess = SINGLE_MODE_SESSIONS[user]
-            word = sess.word
-            player_count = sess.player_count
-            time = sess.time.strftime("%H:%M:%S %Y-%m-%d")
-            parts.append(f"{user} | {word} | {player_count} | {time}")
-        result_single_mode = "\n".join(parts)
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=result_single_mode,
-            parse_mode=ParseMode.HTML,
-        )
-
-
-
-
-

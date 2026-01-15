@@ -9,9 +9,19 @@ def get_main_keyboard(admin : str | None = None) -> ReplyKeyboardMarkup:
             ["🃏 Сингл мод", "🎁 Реферальная система"],
         ]
     if admin is not None:
-        keyboard.append(admin)
+        keyboard.append([admin])
     return ReplyKeyboardMarkup(
         keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=False,
+    )
+
+def get_admin_panel_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            ["📊 Стата сингл мода","📈 Общая стата"],
+            ["📢 Запустить рассылку","⬅️ Назад"], 
+        ],
         resize_keyboard=True,
         one_time_keyboard=False,
     )

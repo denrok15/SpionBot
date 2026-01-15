@@ -1,0 +1,44 @@
+name: Manual DB Backup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Backup PostgreSQL via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 51.250.99.137
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: 22
+          script: |
+            set -e
+
+            echo "🗄️ Starting PostgreSQL backup..."
+
+            BACKUP_DIR=~/backups
+            DB_NAME=spy_game_bot
+            CONTAINER_NAME=postgres_db
+            DATE=$(date +%F_%H-%M)
+            FILE_NAME=backup_${DB_NAME}_${DATE}.sql.gz
+
+            echo "📁 Creating backup directory if not exists..."
+            mkdir -p $BACKUP_DIR
+
+            echo "📦 Dumping database: $DB_NAME"
+            docker exec -t $CONTAINER_NAME \
+              pg_dump -U postgres $DB_NAME \
+              | gzip > $BACKUP_DIR/$FILE_NAME
+
+            echo "✅ Backup created:"
+            ls -lh $BACKUP_DIR/$FILE_NAME
+
+            echo "🧹 Cleaning old backups (older than 7 days)..."
+            find $BACKUP_DIR -type f -name "*.sql.gz" -mtime +7 -delete
+
+            echo "🎉 Database backup completed successfully!"

@@ -210,6 +210,26 @@ class ButtonCommand(CreateDB):
                 "total_players": total_players,
             }
 
+    async def get_all_known_user_ids(self) -> list[int]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT user_id FROM user_accounts
+                UNION
+                SELECT user_id FROM players
+                UNION
+                SELECT user_id FROM referrals
+                UNION
+                SELECT inviter_id AS user_id FROM referrals
+                """
+            )
+            user_ids = []
+            for row in rows:
+                user_id = row["user_id"]
+                if isinstance(user_id, int) and user_id > 0:
+                    user_ids.append(user_id)
+            return user_ids
+
     async def get_cached_image(self, url: str) -> Optional[str]:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
