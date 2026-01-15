@@ -39,17 +39,17 @@ jobs:
           
           if (otherRuns.length > 0) {
             const workflowNames = otherRuns.map(run => run.name).join(', ');
-            console.log('⚠️ Found ${otherRuns.length} other workflows in progress:');
+            console.log(`⚠️ Found ${otherRuns.length} other workflows in progress:`);
             console.log(workflowNames);
             const forceDeploy = '${{ github.event.inputs.force_deploy }}' === 'true';
             
             if (!forceDeploy) {
               core.setOutput('can_deploy', 'false');
               core.setOutput('running_workflows', workflowNames);
-              core.setFailed(Cannot deploy while other workflows are running: ${workflowNames}. Use force_deploy option to override.);
+              core.setFailed(`Cannot deploy while other workflows are running: ${workflowNames}. Use force_deploy option to override.`);
               return;
             } else {
-              console.log('⚠️ Force deploy enabled - proceeding despite running workflows');
+              console.log(`⚠️ Force deploy enabled - proceeding despite running workflows`);
             }
           }
           
