@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 
 from const import (
     MODE_CLASH,
+    HINT_PRICES
 )
 from database.actions import db
 from handlers.button import (
@@ -21,7 +22,6 @@ from handlers.button import (
 
 )
 from database.redis import get_clue_hero
-from handlers.commands import HINT_QUANTITIES
 from utils.decorators import hint_guard
 from utils.gameMod import get_theme_name, get_words_and_cards_by_mode
 
@@ -41,11 +41,11 @@ async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"Подсказки помогут тебе быстрее понять, какой персонаж загадан!\n\n"
         f"Существует 3 вида подсказок:\n"
         f"1) Hard — абстрактный факт, который максимально обобщённо описывает персонажа "
-        f"(Цена: {HINT_QUANTITIES[0]}✨)\n"
+        f"(Цена: {HINT_PRICES['hard']}✨)\n"
         f"2) Medium — факт, который поймут любители и профессионалы, но не многие новички "
-        f"(Цена: {HINT_QUANTITIES[1]}✨)\n"
+        f"(Цена: {HINT_PRICES['medium']}✨)\n"
         f"3) Easy — факт, который будет понятен даже новичкам! "
-        f"(Цена: {HINT_QUANTITIES[2]}✨)\n\n"
+        f"(Цена: {HINT_PRICES['easy']}✨)\n\n"
         f"Если у вас нет подсказок — их можно приобрести в в личном кабинете.",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_room:{source}")]]
