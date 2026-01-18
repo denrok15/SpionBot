@@ -36,6 +36,7 @@ class CreateDB:
                     mode VARCHAR(20) DEFAULT 'clash',
                     word VARCHAR(100),
                     spy_id BIGINT,
+                    spy_count INTEGER NOT NULL DEFAULT 1,
                     card_url TEXT,
                     game_started BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -43,6 +44,9 @@ class CreateDB:
                     expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '24 hours'
                 )
             """)
+            await conn.execute(
+                "ALTER TABLE rooms ADD COLUMN IF NOT EXISTS spy_count INTEGER NOT NULL DEFAULT 1"
+            )
 
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS players (

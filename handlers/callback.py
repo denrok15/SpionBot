@@ -29,6 +29,53 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODE = MODE_CLASH
 
+
+async def set_spies_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    data = query.data or ""
+    parts = data.split(":")
+    if len(parts) != 4:
+        return
+    _, action, room_id, count_raw = parts
+    if action != "set":
+        return
+    user_id = query.from_user.id
+    try:
+        requested = int(count_raw)
+    except ValueError:
+        await query.answer("Введите число.", show_alert=True)
+        return
+
+    room = await db.get_room(room_id)
+    if not room:
+        await query.answer("Комната не найдена.", show_alert=True)
+        return
+    if room.get("creator_id") != user_id:
+        await query.answer("Только создатель может менять шпионов.", show_alert=True)
+        return
+    if room.get("game_started"):
+        await query.answer("Игра уже началась — перезапустите.", show_alert=True)
+        return
+
+    players = await db.get_room_players(room_id)
+    max_spies = max(1, len(players) - 1)
+    if requested < 1:
+        requested = 1
+    if requested > max_spies:
+        requested = max_spies
+
+    await db.update_room_spy_count(room_id, requested)
+    await query.answer(f"Шпионов: {requested}")
+    try:
+        await query.message.edit_text(
+            f"✅ Кол-во шпионов установлено: {requested}\n"
+            f"ℹ️ Можно изменить командой: /spies <число>"
+        )
+    except Exception:
+        pass
+
 async def show_clues_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Сработал show_clues_callback")
     query = update.callback_query
@@ -70,9 +117,10 @@ async def back_to_room_callback(update: Update, context: ContextTypes.DEFAULT_TY
     words, _ = get_words_and_cards_by_mode(DEFAULT_MODE)
     reply_keyboard = get_inline_keyboard(source)
     players = await db.get_room_players(room_id)
+    spy_count = room.get("spy_count", 1)
     call_text = {
-        'join_game':get_join_room_text(room_id,len(players),get_theme_name(DEFAULT_MODE)),
-        'start_game':get_message_start(room_id, len(players), get_theme_name(DEFAULT_MODE)),
+        'join_game':get_join_room_text(room_id,len(players),get_theme_name(DEFAULT_MODE), spy_count=spy_count),
+        'start_game':get_message_start(room_id, len(players), get_theme_name(DEFAULT_MODE), spy_count=spy_count),
         'restart_game':get_restart_room_text(room_id, players, room),
     }
     await query.message.edit_text(

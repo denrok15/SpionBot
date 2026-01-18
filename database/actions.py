@@ -13,20 +13,32 @@ class ButtonCommand(CreateDB):
         self.pool = pool
 
     async def create_room(
-        self, room_id: str, creator_id: int, mode: str = "clash"
+        self, room_id: str, creator_id: int, mode: str = "clash", spy_count: int = 1
     ) -> bool:
+        if not isinstance(spy_count, int) or spy_count < 1:
+            spy_count = 1
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(
-                    """
-                    INSERT INTO rooms (id, creator_id, mode, expires_at)
-                    VALUES ($1, $2, $3, CURRENT_TIMESTAMP + INTERVAL '24 hours')
-                """,
-                    room_id,
-                    creator_id,
-                    mode,
-                )
-                await self.add_player_to_room(creator_id, room_id)
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        INSERT INTO rooms (id, creator_id, mode, spy_count, expires_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+                        """,
+                        room_id,
+                        creator_id,
+                        mode,
+                        spy_count,
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO players (user_id, room_id)
+                        VALUES ($1, $2)
+                        ON CONFLICT (user_id, room_id) DO NOTHING
+                        """,
+                        creator_id,
+                        room_id,
+                    )
                 return True
             except asyncpg.UniqueViolationError:
                 return False
@@ -86,6 +98,20 @@ class ButtonCommand(CreateDB):
                 WHERE id = $2
             """,
                 mode,
+                room_id,
+            )
+
+    async def update_room_spy_count(self, room_id: str, spy_count: int) -> None:
+        if not isinstance(spy_count, int) or spy_count < 1:
+            spy_count = 1
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE rooms
+                SET spy_count = $1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                """,
+                spy_count,
                 room_id,
             )
 
@@ -174,7 +200,28 @@ class ButtonCommand(CreateDB):
                 "ORDER BY rooms.created_at DESC LIMIT 1",
                 user_id,
             )
-            return row["room_id"] if row else None
+            if row:
+                return row["room_id"]
+            creator_row = await conn.fetchrow(
+                "SELECT id FROM rooms WHERE creator_id = $1 ORDER BY created_at DESC LIMIT 1",
+                user_id,
+            )
+            if not creator_row:
+                return None
+            room_id = creator_row["id"]
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO players (user_id, room_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT (user_id, room_id) DO NOTHING
+                    """,
+                    user_id,
+                    room_id,
+                )
+            except Exception:
+                pass
+            return room_id
 
     async def get_room_creator(self, room_id: str) -> Optional[int]:
         async with self.pool.acquire() as conn:

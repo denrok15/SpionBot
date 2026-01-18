@@ -68,12 +68,14 @@ def get_room_mode_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=False,
     )
-def get_message_start(room_id: str, players: int, mode: str) -> str:
+def get_message_start(room_id: str, players: int, mode: str, spy_count: int = 1) -> str:
     return (
         f"ID комнаты: <code>{room_id}</code>\n"
         f"Отправьте этот ID другим игрокам\n\n"
         f"👥 Игроков: {str(players)}/15\n"
         f"🎴 Режим: {mode}\n"
+        f"🕵️ Шпионов: {spy_count}\n"
+        f"🕵️ Сменить: /spies &lt;число&gt;\n"
         f"⬇️ Выберите режим через кнопки снизу\n"
         f"🔄 Для быстрой смены режима можно использовать команды\n"
         f"📲 /mode_clash, /mode_dota или /mode_brawl \n"
@@ -85,16 +87,34 @@ def get_restart_room_text(room_id,players,room) -> str:
     f"ID комнаты: <code>{room_id}</code>\n"
     f"👥 Игроков: {len(players)}\n"
     f"🎴 Режим: {get_theme_name(room['mode'])}\n"
+    f"🕵️ Шпионов: {room.get('spy_count', 1)}\n"
+    f"🕵️ Сменить: /spies &lt;число&gt;\n"
     f"🎱 Используй для смены режимы \n /mode_clash /mode_dota /mode_brawl \n"
     f"Для начала новой игры нажмите '▶️ Начать игру'")
 
-def get_join_room_text(room_id,players,mode) -> str:
+def get_join_room_text(room_id,players,mode, spy_count: int = 1) -> str:
     return (
         f"ID комнаты: <code>{room_id}</code>\n"
         f"Отправьте этот ID другим игрокам\n\n"
         f"👥 Игроков: {str(players)}/15\n"
         f"🎴 Режим: {mode}\n"
+        f"🕵️ Шпионов: {spy_count}\n"
         f"🔥 Тыкни на подсказки и узнай как побеждать проще 🙂")
+
+
+def build_spy_count_keyboard(room_id: str, max_spies: int = 7) -> InlineKeyboardMarkup:
+    options = list(range(1, max_spies + 1))
+    rows = []
+    for i in range(0, len(options), 3):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    f"{count}", callback_data=f"spies:set:{room_id}:{count}"
+                )
+                for count in options[i : i + 3]
+            ]
+        )
+    return InlineKeyboardMarkup(rows)
 def _build_cabinet_keyboard():
     return InlineKeyboardMarkup(
         [
