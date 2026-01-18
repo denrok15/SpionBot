@@ -1196,10 +1196,10 @@ async def admin_broadcast_subscribe(update: Update, context: ContextTypes.DEFAUL
     user_ids = await db.get_all_known_user_ids()
 
     text = (
-        "<b>📢 SpionGame — наш канал</b>\n\n"
-        "Тут выходят обновы бота и анонсы.\n"
-        "Также иногда можно поиграть вместе с админами.\n\n"
-        "Нажми кнопку ниже и подпишись, чтобы не пропускать 🔥"
+        "<b>🎁 Хочешь бесплатные подсказки?</b>\n\n"
+        "Если мы наберём <b>50 ❤️</b> под последним постом в нашем канале —\n"
+        "мы выдадим <b>каждому по 5 подсказок</b>.\n\n"
+        "Переходи по кнопке, ставь ❤️ и участвуй 👇"
     )
     sent = 0
     failed = 0
@@ -1209,7 +1209,15 @@ async def admin_broadcast_subscribe(update: Update, context: ContextTypes.DEFAUL
                 chat_id=recipient_id,
                 text=text,
                 parse_mode=ParseMode.HTML,
-                reply_markup=subscribe_keyboard(),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "💝 Получить подсказки", url="https://t.me/it_tut0/66"
+                            )
+                        ]
+                    ]
+                ),
             )
             sent += 1
         except Exception:
